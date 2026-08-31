@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Controle de Equipamentos - E.M. Maria Olímpia</title>
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+  <div id="login" class="login">
+    <div class="login-card">
+      <div class="logo">💻</div>
+      <h1>Controle de Equipamentos</h1>
+      <p>Escola Maria Olímpia de Souza Queiroz Maciel</p>
+      <form id="loginForm">
+        <label>Nome completo ou e-mail
+          <input id="loginUser" required placeholder="Ex: professor@escola.local">
+        </label>
+        <label>Senha
+          <input id="loginPass" type="password" required>
+        </label>
+        <button type="submit" class="btn-primary" style="width:100%; margin-top:10px;">Entrar no Sistema</button>
+        <div id="loginError" class="error"></div>
+      </form>
+      <small>Sistema Sincronizado em Nuvem</small>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <header>
+      <strong>💻 Reserva de Equipamentos</strong>
+      <div>
+        <span id="who"></span>
+        <button id="logout" class="secondary">Sair</button>
+      </div>
+    </header>
+    <div class="layout">
+      <nav id="nav"></nav>
+      <main id="main"></main>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
