@@ -1,4 +1,4 @@
-// CONFIGURAÇÃO DO SEU PROJETO FIREBASE
+// CONFIGURAÇÃO DO FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyCaz1JCXX1RLOZviyG3Ggf47B0blheSa68",
   authDomain: "reserva-escolamariaolimpia.firebaseapp.com",
