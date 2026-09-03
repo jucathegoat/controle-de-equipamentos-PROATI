@@ -1,4 +1,18 @@
-// CONFIGURAÇÃO DO FIREBASE
+// FORÇAR DESREGISTRO DE SERVICE WORKER ANTIGO NO NAVEGADOR
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    for (let registration of registrations) {
+      registration.unregister();
+    }
+  });
+}
+if ('caches' in window) {
+  caches.keys().then(names => {
+    for (let name of names) caches.delete(name);
+  });
+}
+
+// CONFIGURAÇÃO DO SEU PROJETO FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyCaz1JCXX1RLOZviyG3Ggf47B0blheSa68",
   authDomain: "reserva-escolamariaolimpia.firebaseapp.com",
@@ -13,9 +27,26 @@ if (!firebase.apps.length) {
 }
 const firestore = firebase.firestore();
 
-const SESSION_KEY = "controle_sessao_v2";
+// CHAVES DE SESSÃO ESTÁVEIS
+const SESSION_KEY = "controle_sessao_proati_v11";
+const USER_CACHE_KEY = "controle_user_data_v11";
 
-// CAPTURA DO BOTÃO DE INSTALAÇÃO AUTOMÁTICA (PWA)
+// AVARIAS INICIAIS MAPEADAS
+const AVARIAS_INICIAIS = [
+  "SA3", "SA4", "SA10", "SA12", "SA29", "SA33", "SA34",
+  "PV1", "PV3", "PV5", "PV9",
+  "PN9"
+];
+
+// MODELOS OFICIAIS (TOTAL 158 MÁQUINAS)
+const MODELOS_EQUIPAMENTO = [
+  { id: "M", label: "M (Multilaser - M1 a M76)" },
+  { id: "SA", label: "SA (Samsung - SA1 a SA45)" },
+  { id: "PV", label: "PV (Positivo Velho - PV1 a PV15)" },
+  { id: "PN", label: "PN (Positivo Novo - PN1 a PN11)" },
+  { id: "TAB", label: "TAB (Tablet - TAB1 a TAB11)" }
+];
+
 let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
@@ -24,10 +55,6 @@ window.addEventListener('beforeinstallprompt', (e) => {
     modalPWAInstalacao();
   }
 });
-
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
-}
 
 const TABELAS_HORARIOS = {
   "6_7": [
@@ -58,19 +85,12 @@ const FINALIDADES = [
   { id: "outros", label: "📌 Outros", priority: 4 }
 ];
 
-const MODELOS_EQUIPAMENTO = [
-  { id: "M", label: "M (Multilaser)" },
-  { id: "PV", label: "PV (Positivo Velho)" },
-  { id: "PN", label: "PN (Positivo Novo)" },
-  { id: "SA", label: "SA (Samsung)" },
-  { id: "TAB", label: "TAB (Tablet)" }
-];
-
 const FERIADOS_FIXOS = ["01-01", "04-21", "05-01", "09-07", "10-12", "11-02", "11-15", "11-20", "12-25"];
 
 let db = { users: [], machines: [], reservas: [], bloqueios: [], emprestimos: [], transferencias: [], reports: [] };
 let user = null;
 let currentPage = "dashboard";
+const transferenciasExibidas = new Set();
 
 const hojeData = new Date();
 let calYear = hojeData.getFullYear();
@@ -79,7 +99,7 @@ let calMonth = hojeData.getMonth();
 const $ = id => document.getElementById(id);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
 const esc = x => String(x ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const pill = s => `<span class="pill ${s}">${({ available: "Disponível", reserved: "Reservado", use: "Em uso", maintenance: "Manutenção" }[s] || s)}</span>`;
+const pill = s => `<span class="pill ${s}">${({ available: "Disponível", reserved: "Reservado", use: "Em uso", maintenance: "Avaria / Manutenção" }[s] || s)}</span>`;
 
 function timeToMin(timeStr) {
   if (!timeStr) return 0;
@@ -135,31 +155,67 @@ function aplicarEstilosModernos() {
     .pill.available { background: #dcfce7; color: #166534; }
     .pill.reserved { background: #dbeafe; color: #1e40af; }
     .pill.use { background: #fef3c7; color: #92400e; }
-    
-    .machine-grid-selector {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-      gap: 8px;
-      max-height: 250px;
-      overflow-y: auto;
-      padding: 8px;
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-sm);
+    .pill.maintenance { background: #fee2e2; color: #991b1b; }
+
+    .modal-box-sm {
+      max-width: 360px !important;
+      padding: 16px !important;
+      border-radius: 12px !important;
     }
-    .machine-chip {
-      padding: 8px;
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-sm);
-      text-align: center;
-      cursor: pointer;
+
+    .btn-model-filter {
+      padding: 6px 12px;
       font-size: 12px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
       background: #f1f5f9;
+      color: #334155;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
     }
-    .machine-chip.selected {
+    .btn-model-filter:hover { background: #e2e8f0; }
+    .btn-model-filter.active {
       background: #2563eb;
       color: #ffffff;
       border-color: #1d4ed8;
+    }
+
+    .assign-chips-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+      gap: 6px;
+      max-height: 220px;
+      overflow-y: auto;
+      border: 1px solid var(--border-color);
+      padding: 10px;
+      border-radius: var(--radius-sm);
+      background: #ffffff;
+    }
+    .chip-item {
+      padding: 8px 4px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      text-align: center;
+      font-size: 12px;
       font-weight: bold;
+      cursor: pointer;
+      user-select: none;
+      background: #f8fafc;
+      color: #334155;
+      transition: all 0.15s;
+    }
+    .chip-item:hover { border-color: #2563eb; }
+    .chip-item.selected {
+      background: #2563eb !important;
+      color: #ffffff !important;
+      border-color: #1d4ed8 !important;
+      box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
+    }
+    .chip-item.has-avaria {
+      border-color: #ef4444;
+      color: #991b1b;
+      background: #fef2f2;
     }
 
     .admin-comment-box {
@@ -196,7 +252,9 @@ function escutarColecao(colecao, chaveDb) {
     db[chaveDb] = snapshot.docs.map(doc => ({ idDoc: doc.id, ...doc.data() }));
     if (user) {
       verificarTransferenciasPendentes();
-      window[currentPage]();
+      if (typeof window[currentPage] === 'function') {
+        window[currentPage]();
+      }
     }
   });
 }
@@ -218,9 +276,31 @@ function inicializarBancoEmNuvem() {
   });
 
   firestore.collection("machines").get().then(snap => {
-    if (snap.empty) {
-      for (let i = 1; i <= 156; i++) firestore.collection("machines").add({ id: String(i).padStart(3, "0"), type: "notebook", status: "available", serialNumber: "" });
-      for (let i = 1; i <= 11; i++) firestore.collection("machines").add({ id: "TAB-" + String(i).padStart(2, "0"), type: "tablet", status: "available", serialNumber: "" });
+    const totalAtual = snap.docs.length;
+    if (snap.empty || totalAtual !== 158) {
+      const exclusoes = snap.docs.map(doc => doc.ref.delete());
+      Promise.all(exclusoes).then(() => {
+        for (let i = 1; i <= 76; i++) {
+          const id = `M${i}`;
+          firestore.collection("machines").add({ id, model: "M", type: "notebook", status: AVARIAS_INICIAIS.includes(id) ? "maintenance" : "available", serialNumber: "" });
+        }
+        for (let i = 1; i <= 45; i++) {
+          const id = `SA${i}`;
+          firestore.collection("machines").add({ id, model: "SA", type: "notebook", status: AVARIAS_INICIAIS.includes(id) ? "maintenance" : "available", serialNumber: "" });
+        }
+        for (let i = 1; i <= 15; i++) {
+          const id = `PV${i}`;
+          firestore.collection("machines").add({ id, model: "PV", type: "notebook", status: AVARIAS_INICIAIS.includes(id) ? "maintenance" : "available", serialNumber: "" });
+        }
+        for (let i = 1; i <= 11; i++) {
+          const id = `PN${i}`;
+          firestore.collection("machines").add({ id, model: "PN", type: "notebook", status: AVARIAS_INICIAIS.includes(id) ? "maintenance" : "available", serialNumber: "" });
+        }
+        for (let i = 1; i <= 11; i++) {
+          const id = `TAB${i}`;
+          firestore.collection("machines").add({ id, model: "TAB", type: "tablet", status: "available", serialNumber: "" });
+        }
+      });
     }
   });
 }
@@ -242,7 +322,7 @@ const availInLessons = (d, selectedIndices, t, targetSegment = "6_7", ignoreBatc
     if (blocked) return false;
 
     const temConflito = db.reservas.some(r => {
-      if (r.date !== d || r.equipment !== m.id || r.status !== "confirmed") return false;
+      if (r.date !== d || r.equipment !== m.id || r.status === "confirmed") return false;
       if ((r.batchId || r.id) === ignoreBatchId) return false;
 
       const tabelaReserva = TABELAS_HORARIOS[r.segment || "6_7"] || TABELAS_HORARIOS["6_7"];
@@ -257,13 +337,22 @@ const availInLessons = (d, selectedIndices, t, targetSegment = "6_7", ignoreBatc
 };
 
 function verificarSessaoSalva() {
-  const savedDocId = localStorage.getItem(SESSION_KEY);
+  const savedDocId = localStorage.getItem(SESSION_KEY) || localStorage.getItem("controle_sessao_v10") || localStorage.getItem("controle_sessao_v9");
+  const cachedUserData = localStorage.getItem(USER_CACHE_KEY);
+
+  if (cachedUserData) {
+    try {
+      const u = JSON.parse(cachedUserData);
+      if (u && u.name) {
+        iniciarSessao(u);
+      }
+    } catch (e) {}
+  }
+
   if (savedDocId) {
     firestore.collection("users").doc(savedDocId).get().then(doc => {
       if (doc.exists) {
         iniciarSessao({ idDoc: doc.id, ...doc.data() });
-      } else {
-        localStorage.removeItem(SESSION_KEY);
       }
     }).catch(() => {});
   }
@@ -277,18 +366,16 @@ if (document.readyState === "loading") {
 
 function iniciarSessao(u) {
   user = u;
-  if (u.idDoc) localStorage.setItem(SESSION_KEY, u.idDoc);
+  if (u.idDoc) {
+    localStorage.setItem(SESSION_KEY, u.idDoc);
+    localStorage.setItem(USER_CACHE_KEY, JSON.stringify(u));
+  }
   $("login").classList.add("hidden");
   $("app").classList.remove("hidden");
   $("who").textContent = u.name + " · " + (u.role === "admin" ? "Admin" : "Prof.");
+  
+  verificarTransferenciasPendentes();
   nav("dashboard");
-  verificarTutorialPrimeiroAcesso();
-}
-
-function verificarTutorialPrimeiroAcesso() {
-  if (!localStorage.getItem("pwa_tutorial_v1")) {
-    modalPWAInstalacao();
-  }
 }
 
 function modalPWAInstalacao() {
@@ -301,41 +388,27 @@ function modalPWAInstalacao() {
 
     <div class="notice danger-notice" style="margin-bottom:12px; font-size:13px; border-left:4px solid #ef4444; background:#fef2f2; padding:10px; border-radius:6px; color:#991b1b;">
       ⚠️ <b>ATENÇÃO:</b> Utilize preferencialmente o navegador <b>GOOGLE CHROME</b>.<br>
-      ❌ Caso você não esteja usando o Google Chrome ou encontre qualquer dificuldade, <b>consulte o PROATI!</b>
+      ❌ Caso não esteja usando o Google Chrome, <b>consulte o PROATI!</b>
     </div>
     
     ${deferredPrompt ? `
       <div style="text-align:center; padding:10px 0;">
-        <p style="font-size:14px; color:#334155; margin-bottom:16px;">
-          Clique no botão abaixo para criar o atalho direto na sua tela inicial:
-        </p>
         <button id="btnInstalarAuto" class="btn-primary" style="background:#16a34a; font-size:16px; padding:14px; width:100%;">
           ⚡ Criar Atalho na Tela Inicial
         </button>
       </div>
     ` : isIOS ? `
-      <div style="font-size:13px; color:#334155; line-height:1.5;">
-        <p><b>No iPhone / iPad (Safari):</b></p>
-        <ol style="padding-left:20px; margin:10px 0;">
-          <li>Toque no botão <b>Compartilhar</b> ⎘ (no rodapé do navegador).</li>
-          <li>Role as opções e selecione <b>"Adicionar à Tela de Início"</b>.</li>
-          <li>Toque em <b>Adicionar</b> no canto superior direito.</li>
-        </ol>
-        <button class="btn-primary" style="margin-top:12px; width:100%; background:#2563eb;" onclick="concluirTutorialPWA()">
-          ✅ Já fiz isso / Acessar
+      <div style="font-size:13px; color:#334155;">
+        <p><b>No Safari:</b> Toque em <b>Compartilhar ⎘</b> > <b>Adicionar à Tela de Início</b>.</p>
+        <button class="btn-primary" style="margin-top:12px; width:100%;" onclick="concluirTutorialPWA()">
+          ✅ Continuar
         </button>
       </div>
     ` : `
-      <div style="font-size:13px; color:#334155; line-height:1.5;">
-        <p><b>Passo a passo no Notebook (GOOGLE CHROME):</b></p>
-        <ol style="padding-left:20px; margin:10px 0; line-height:1.6;">
-          <li>Certifique-se de estar usando o navegador <b>GOOGLE CHROME</b>.</li>
-          <li>Clique nos <b>3 pontinhos (⋮)</b> no canto superior direito.</li>
-          <li>Passe o mouse em <b>"Transmitir, guardar e partilhar"</b> (ou <i>Salvar e compartilhar</i>).</li>
-          <li>Clique em <b>"Instalar página como app..."</b> ou <b>"Criar atalho..."</b>.</li>
-        </ol>
-        <button class="btn-primary" style="margin-top:12px; width:100%; background:#2563eb;" onclick="concluirTutorialPWA()">
-          ✅ Entendi / Continuar
+      <div style="font-size:13px; color:#334155;">
+        <p><b>No Chrome:</b> Clique nos <b>3 pontinhos (⋮)</b> > <b>Instalar página como app...</b></p>
+        <button class="btn-primary" style="margin-top:12px; width:100%;" onclick="concluirTutorialPWA()">
+          ✅ Entendi
         </button>
       </div>
     `}
@@ -347,9 +420,7 @@ function modalPWAInstalacao() {
       if (deferredPrompt) {
         deferredPrompt.prompt();
         const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
-          concluirTutorialPWA();
-        }
+        if (outcome === 'accepted') concluirTutorialPWA();
         deferredPrompt = null;
       }
     };
@@ -358,8 +429,7 @@ function modalPWAInstalacao() {
 
 function concluirTutorialPWA() {
   localStorage.setItem("pwa_tutorial_v1", "true");
-  const activeModals = document.querySelectorAll(".modal");
-  activeModals.forEach(m => m.remove());
+  document.querySelectorAll(".modal").forEach(m => m.remove());
 }
 
 $("loginForm").addEventListener("submit", async e => {
@@ -396,6 +466,7 @@ $("loginForm").addEventListener("submit", async e => {
 $("logout").onclick = () => {
   user = null;
   localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(USER_CACHE_KEY);
   $("app").classList.add("hidden");
   $("login").classList.remove("hidden");
   $("loginForm").reset();
@@ -428,8 +499,21 @@ function nav(page) {
     }).join("");
 
   document.querySelectorAll("#nav button").forEach(b => b.onclick = () => nav(b.dataset.p));
-  window[page]();
+  if (typeof window[page] === 'function') {
+    window[page]();
+  }
 }
+
+// FUNÇÃO DE AGENDAMENTO RÁPIDO
+function modalAgendamentoRapido() {
+  const d = new Date();
+  const dia = String(d.getDate()).padStart(2, '0');
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const ano = d.getFullYear();
+  const hoje = `${ano}-${mes}-${dia}`;
+  modalReserva(hoje);
+}
+window.modalAgendamentoRapido = modalAgendamentoRapido;
 
 function dashboard() {
   const hoje = new Date().toISOString().split("T")[0];
@@ -493,14 +577,14 @@ function avarias() {
     <div class="head">
       <div>
         <h2>🛠️ Central de Avarias e Busca de Equipamentos</h2>
-        <div class="muted">Pesquise qualquer máquina pelo ID/Nº de Série e consulte todo o histórico de reports e respostas da administração.</div>
+        <div class="muted">Pesquise qualquer máquina pelo ID/Nº de Série e consulte todo o histórico de reports.</div>
       </div>
       <button class="btn-primary" onclick="modalReportDefeito()">+ Reportar Novo Defeito</button>
     </div>
 
     <div class="card" style="margin-bottom:16px;">
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-        <input id="searchMachine" placeholder="🔍 Digite o ID da máquina (ex: SA3, PV1, 014)..." style="flex:1; padding:10px; border-radius:6px; border:1px solid #cbd5e1;">
+        <input id="searchMachine" placeholder="🔍 Digite o ID da máquina (ex: SA3, PV1, PN9, M16)..." style="flex:1; padding:10px; border-radius:6px; border:1px solid #cbd5e1;">
         <select id="filterStatus" style="padding:10px; border-radius:6px; border:1px solid #cbd5e1;">
           <option value="todos">Todos os Status</option>
           <option value="pendente">Pendentes</option>
@@ -571,7 +655,7 @@ function renderizarTabelaAvarias(query = "", filterStatus = "todos") {
                 </div>
               ` : `<span class="muted">Sem comentários</span>`}
             </td>
-            <td>${r.status === "pendente" ? `<span class="pill reserved">Pendente</span>` : `<span class="pill available">Resolvido</span>`}</td>
+            <td>${r.status === "pendente" ? `<span class="pill maintenance">Avaria / Pendente</span>` : `<span class="pill available">Resolvido</span>`}</td>
             ${user.role === "admin" ? `
               <td>
                 <button class="ok" onclick="modalResponderReport('${r.idDoc}')">💬 Comentar / Responder</button>
@@ -706,87 +790,152 @@ function modalAtribuirMaquinasPedido(batchId) {
 
   const qtdNecessaria = new Set(emprestimos.map(x => x.equipment)).size;
   const professorNome = emprestimos[0].userName;
-  const tipoEquip = emprestimos[0].type || "notebook";
 
-  const maquinasDisponiveis = db.machines.filter(m => m.type === tipoEquip && m.status === "available");
+  let modeloAtual = "M";
+  let maquinasSelecionadas = [];
 
   const m = modal(`
     <div class="modal-top">
-      <h2>📌 Atribuir Máquinas Rotativas no Pedido</h2>
+      <h2>📌 Atribuir Máquinas no Pedido</h2>
       <button class="close">&times;</button>
     </div>
-    <form id="fAssignOrder">
-      <div class="notice" style="margin-bottom:12px; font-size:13px;">
-        Entregando para <b>Prof. ${esc(professorNome)}</b>.<br>
-        Selecione exatamente <b>${qtdNecessaria} máquina(s)</b> para vincular a este lote:
-      </div>
+    <div class="notice" style="margin-bottom:12px; font-size:13px;">
+      Entregando para: <b>Prof. ${esc(professorNome)}</b> | Selecionadas: <b id="lblCounter" style="color:#2563eb;">0 / ${qtdNecessaria} máq.</b>
+    </div>
 
-      <div class="machine-grid-selector" id="machineGrid">
-        ${maquinasDisponiveis.map(m => `
-          <div class="machine-chip" data-id="${m.id}">
-            <b>${m.id}</b>
-          </div>
-        `).join("")}
+    <div style="margin-bottom:12px;">
+      <label style="font-size:12px; font-weight:bold; color:#475569; display:block; margin-bottom:6px;">Filtrar / Tipo de Equipamento:</label>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;" id="modelFilterButtons">
+        <button type="button" class="btn-model-filter active" data-model="M">Todos M (Multilaser)</button>
+        <button type="button" class="btn-model-filter" data-model="SA">Todos SA (Samsung)</button>
+        <button type="button" class="btn-model-filter" data-model="PV">Todos PV (Positivo V.)</button>
+        <button type="button" class="btn-model-filter" data-model="PN">Todos PN (Positivo N.)</button>
+        <button type="button" class="btn-model-filter" data-model="TAB">Todos TAB (Tablet)</button>
       </div>
+    </div>
 
-      <div style="margin-top:10px; font-size:13px;" id="lblCount">
-        Selecionadas: <b><span id="selectedCount">0</span> / ${qtdNecessaria}</b>
-      </div>
+    <div style="margin-bottom:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <button type="button" id="btnAutoSelectFirst" class="btn-primary" style="font-size:12px; padding:6px 12px; background:#16a34a;">
+        ⚡ Auto-selecionar Primeiras ${qtdNecessaria} deste Tipo
+      </button>
+      <button type="button" id="btnClearSelection" class="danger" style="font-size:12px; padding:6px 12px;">
+        🧹 Limpar Seleção
+      </button>
+    </div>
 
-      <button type="submit" class="btn-primary" style="margin-top:16px; width:100%">✅ Confirmar Entrega e Liberar Lote</button>
+    <div id="gridChipsContainer" class="assign-chips-grid"></div>
+
+    <div style="margin-top:12px; padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; font-size:13px;">
+      <b>Lista para Envio:</b>
+      <div id="selectedSummary" style="margin-top:4px; font-weight:bold; color:#2563eb;">Nenhuma máquina selecionada</div>
+    </div>
+
+    <form id="fAssignOrder" style="margin-top:14px;">
+      <button type="submit" class="btn-primary" style="width:100%">✅ Confirmar Entrega e Liberar Lote</button>
     </form>
   `);
 
-  const selecionadas = new Set();
-  const chips = m.querySelectorAll(".machine-chip");
+  const renderGrid = () => {
+    const container = m.querySelector("#gridChipsContainer");
+    const maquinasDoModelo = db.machines.filter(m => m.model === modeloAtual);
 
-  chips.forEach(chip => {
-    chip.onclick = () => {
-      const id = chip.dataset.id;
-      if (selecionadas.has(id)) {
-        selecionadas.delete(id);
-        chip.classList.remove("selected");
-      } else {
-        if (selecionadas.size >= qtdNecessaria) {
-          return alert(`Você já selecionou a quantidade necessária (${qtdNecessaria} máquinas).`);
+    container.innerHTML = maquinasDoModelo.map(maq => {
+      const isSelected = maquinasSelecionadas.includes(maq.id);
+      const isAvaria = AVARIAS_INICIAIS.includes(maq.id) || maq.status === "maintenance";
+
+      return `
+        <div class="chip-item ${isSelected ? 'selected' : ''} ${isAvaria ? 'has-avaria' : ''}" data-id="${maq.id}">
+          ${maq.id} ${isAvaria ? '⚠️' : ''}
+        </div>
+      `;
+    }).join("");
+
+    container.querySelectorAll(".chip-item").forEach(chip => {
+      chip.onclick = () => {
+        const idMaq = chip.dataset.id;
+        if (maquinasSelecionadas.includes(idMaq)) {
+          maquinasSelecionadas = maquinasSelecionadas.filter(x => x !== idMaq);
+        } else {
+          if (maquinasSelecionadas.length >= qtdNecessaria) {
+            return alert(`Você já selecionou a quantidade necessária de ${qtdNecessaria} máquina(s)!`);
+          }
+          maquinasSelecionadas.push(idMaq);
         }
-        selecionadas.add(id);
-        chip.classList.add("selected");
-      }
-      m.querySelector("#selectedCount").textContent = selecionadas.size;
+        atualizarModalUI();
+      };
+    });
+  };
+
+  const atualizarModalUI = () => {
+    m.querySelector("#lblCounter").textContent = `${maquinasSelecionadas.length} / ${qtdNecessaria} máq.`;
+    
+    const summary = m.querySelector("#selectedSummary");
+    if (maquinasSelecionadas.length === 0) {
+      summary.textContent = "Nenhuma máquina selecionada";
+      summary.style.color = "#64748b";
+    } else {
+      summary.textContent = maquinasSelecionadas.join(", ");
+      summary.style.color = "#2563eb";
+    }
+
+    renderGrid();
+  };
+
+  m.querySelectorAll(".btn-model-filter").forEach(btn => {
+    btn.onclick = () => {
+      m.querySelectorAll(".btn-model-filter").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      modeloAtual = btn.dataset.model;
+      renderGrid();
     };
   });
 
+  m.querySelector("#btnAutoSelectFirst").onclick = () => {
+    const disponiveis = db.machines.filter(maq => 
+      maq.model === modeloAtual && 
+      !AVARIAS_INICIAIS.includes(maq.id) && 
+      maq.status !== "maintenance"
+    );
+
+    maquinasSelecionadas = disponiveis.slice(0, qtdNecessaria).map(x => x.id);
+    atualizarModalUI();
+  };
+
+  m.querySelector("#btnClearSelection").onclick = () => {
+    maquinasSelecionadas = [];
+    atualizarModalUI();
+  };
+
   m.querySelector(".close").onclick = () => m.remove();
+
   m.querySelector("#fAssignOrder").onsubmit = async e => {
     e.preventDefault();
-    if (selecionadas.size !== qtdNecessaria) {
-      return alert(`Selecione exatamente ${qtdNecessaria} máquinas antes de confirmar.`);
+
+    if (maquinasSelecionadas.length !== qtdNecessaria) {
+      return alert(`Por favor, selecione exatamente ${qtdNecessaria} máquina(s) antes de confirmar.`);
     }
 
-    const listaMaquinasNovas = Array.from(selecionadas);
-
     const itensBatch = db.emprestimos.filter(x => (x.batchId || x.id) === batchId);
-    
     itensBatch.forEach((item, idx) => {
-      const idMaqAtribuida = listaMaquinasNovas[idx % listaMaquinasNovas.length];
-      
+      const idMaq = maquinasSelecionadas[idx % maquinasSelecionadas.length];
       firestore.collection("emprestimos").doc(item.idDoc).update({
-        equipment: idMaqAtribuida,
+        equipment: idMaq,
         status: "retirado"
       });
     });
 
     db.reservas.filter(x => (x.batchId || x.id) === batchId).forEach((item, idx) => {
-      const idMaqAtribuida = listaMaquinasNovas[idx % listaMaquinasNovas.length];
+      const idMaq = maquinasSelecionadas[idx % maquinasSelecionadas.length];
       firestore.collection("reservas").doc(item.idDoc).update({
-        equipment: idMaqAtribuida
+        equipment: idMaq
       });
     });
 
-    alert("Lote entregue e máquinas atribuídas com sucesso!");
+    alert("Lote atribuído e liberado com sucesso!");
     m.remove();
   };
+
+  renderGrid();
 }
 
 function devolverLoteRotativo(batchId) {
@@ -853,7 +1002,7 @@ function modalReportDefeito() {
           </select>
         </label>
         <label>Número / Identificador da Máquina:
-          <input id="repNum" placeholder="Ex: SA3 ou 014" required>
+          <input id="repNum" placeholder="Ex: SA3 ou 1" required>
         </label>
       </div>
       <label style="margin-top:12px">Descrição do Defeito ou Avaria:
@@ -994,8 +1143,10 @@ function modalTransferirLote(batchId) {
   const emprestimos = db.emprestimos.filter(x => (x.batchId || x.id) === batchId && x.status === "retirado");
   if (!emprestimos.length) return alert("Não há empréstimos ativos para transferir neste lote.");
 
-  const professores = db.users.filter(u => u.id !== user.id);
+  const professores = db.users.filter(u => u.idDoc !== user.idDoc && u.id !== user.id);
   if (!professores.length) return alert("Nenhum outro professor cadastrado no sistema.");
+
+  const transferenciaExistente = db.transferencias.find(t => t.batchId === batchId && t.status === "pendente");
 
   const m = modal(`
     <div class="modal-top">
@@ -1006,10 +1157,15 @@ function modalTransferirLote(batchId) {
       <div class="notice" style="margin-bottom:12px; padding:8px 12px; border-radius:6px; font-size:13px;">
         Selecione o professor que vai receber as <b>${new Set(emprestimos.map(e => e.equipment)).size} máquina(s)</b>. O destinatário precisará confirmar a troca no sistema.
       </div>
+      ${transferenciaExistente ? `
+        <div class="notice danger-notice" style="margin-bottom:12px; font-size:12px;">
+          ⚠️ Existe uma solicitação pendente para <b>Prof. ${esc(transferenciaExistente.toUserName)}</b>. Selecionar outro professor irá atualizar o pedido.
+        </div>
+      ` : ''}
       <label>Professor Destinatário:
         <select id="targetUser" required>
           <option value="">Selecione o professor...</option>
-          ${professores.map(p => `<option value="${p.idDoc}">${esc(p.name)}</option>`).join("")}
+          ${professores.map(p => `<option value="${p.idDoc}" ${transferenciaExistente && transferenciaExistente.toUserDocId === p.idDoc ? 'selected' : ''}>${esc(p.name)}</option>`).join("")}
         </select>
       </label>
       <button class="btn-primary" style="margin-top:18px; width:100%">🚀 Solicitar Transferência</button>
@@ -1017,71 +1173,160 @@ function modalTransferirLote(batchId) {
   `);
 
   m.querySelector(".close").onclick = () => m.remove();
-  m.querySelector("#ftransfer").onsubmit = e => {
+  m.querySelector("#ftransfer").onsubmit = async e => {
     e.preventDefault();
     const targetDocId = $("targetUser").value;
     const targetUser = db.users.find(u => u.idDoc === targetDocId);
     if (!targetUser) return alert("Professor não encontrado.");
 
-    firestore.collection("transferencias").add({
-      id: uid(),
-      batchId,
-      fromUserId: user.id,
-      fromUserName: user.name,
-      toUserId: targetUser.id,
-      toUserName: targetUser.name,
-      toUserDocId: targetUser.idDoc,
-      qty: new Set(emprestimos.map(x => x.equipment)).size,
-      status: "pendente",
-      createdAt: nowFormatted()
-    });
+    try {
+      if (transferenciaExistente) {
+        await firestore.collection("transferencias").doc(transferenciaExistente.idDoc).update({ status: "cancelado" });
+      }
 
-    alert(`Solicitação enviada! O Prof. ${targetUser.name} deve confirmar o aceite no perfil dele.`);
+      const qty = new Set(emprestimos.map(x => x.equipment)).size;
+      await firestore.collection("transferencias").add({
+        id: uid(),
+        batchId,
+        fromUserId: user.id || user.idDoc,
+        fromUserDocId: user.idDoc,
+        fromUserName: user.name,
+        toUserId: targetUser.id || targetUser.idDoc,
+        toUserDocId: targetUser.idDoc,
+        toUserName: targetUser.name,
+        qty: qty,
+        status: "pendente",
+        createdAt: nowFormatted()
+      });
+
+      m.remove();
+      modalSucessoTransferencia(batchId, targetUser.name);
+    } catch (err) {
+      alert("Erro ao enviar a solicitação: " + err.message);
+    }
+  };
+}
+
+function modalSucessoTransferencia(batchId, targetUserName) {
+  const m = modal(`
+    <div class="modal-top">
+      <h2>🎉 Troca Solicitada</h2>
+      <button class="close">&times;</button>
+    </div>
+    <div style="text-align:center; padding:10px 0;">
+      <div style="font-size:16px; font-weight:bold; color:#16a34a; margin-bottom:8px;">
+        ✅ Solicitação de troca feita com sucesso!
+      </div>
+      <p style="font-size:13px; color:#475569; margin-bottom:16px;">
+        Sua solicitação foi enviada para o <b>Prof. ${esc(targetUserName)}</b> e aguarda a confirmação dele.
+      </p>
+
+      <div style="background:#f1f5f9; padding:12px; border-radius:8px; border:1px solid #cbd5e1; margin-bottom:16px;">
+        <span style="font-size:13px; font-weight:600; color:#334155;">Deseja alterar o professor selecionado?</span>
+        <div style="margin-top:8px;">
+          <button id="btnAlterarProf" class="secondary" style="width:100%; font-size:13px; padding:8px;">
+            ✏️ Alterar Professor Destinatário
+          </button>
+        </div>
+      </div>
+
+      <button id="btnFecharSucesso" class="btn-primary" style="width:100%;">
+        👍 OK, Entendi
+      </button>
+    </div>
+  `);
+
+  m.querySelector(".close").onclick = () => m.remove();
+  m.querySelector("#btnFecharSucesso").onclick = () => m.remove();
+  m.querySelector("#btnAlterarProf").onclick = () => {
     m.remove();
+    modalTransferirLote(batchId);
   };
 }
 
 function verificarTransferenciasPendentes() {
   if (!user) return;
-  const pendentes = db.transferencias.filter(t => t.toUserId === user.id && t.status === "pendente");
+
+  const pendentes = db.transferencias.filter(t => 
+    (t.toUserId === user.id || t.toUserDocId === user.idDoc || t.toUserId === user.idDoc) && 
+    t.status === "pendente"
+  );
   if (!pendentes.length) return;
 
   const t = pendentes[0];
-  if (document.getElementById(`transf-modal-${t.id}`)) return;
+  if (transferenciasExibidas.has(t.idDoc)) return;
+
+  transferenciasExibidas.add(t.idDoc);
 
   const m = modal(`
-    <div id="transf-modal-${t.id}">
-      <div class="modal-top">
-        <h2>📥 Confirmação de Transferência de Máquinas</h2>
-      </div>
-      <p style="margin:12px 0;">O <b>Prof. ${esc(t.fromUserName)}</b> deseja transferir <b>${t.qty} máquina(s)</b> para você agora.</p>
-      <div style="display:flex; gap:10px; margin-top:16px;">
-        <button class="ok" style="flex:1" onclick="aceitarTransferencia('${t.idDoc}', '${t.batchId}')">✅ Aceitar e Ficar com as Máquinas</button>
-        <button class="danger" style="flex:1" onclick="recusarTransferencia('${t.idDoc}')">❌ Recusar</button>
+    <div id="transf-modal-${t.id}" style="text-align:center; padding: 4px;">
+      <div style="font-size:28px; margin-bottom:4px;">🔄</div>
+      <h3 style="margin:0 0 6px 0; font-size: 16px; color:#0f172a;">Troca de Equipamentos</h3>
+      <p style="font-size:13px; color:#334155; margin-bottom:14px; line-height: 1.4;">
+        O <b>Prof. ${esc(t.fromUserName)}</b> deseja transferir <b>${t.qty} máquina(s)</b> para você.
+      </p>
+
+      <div style="display:flex; gap:8px;">
+        <button class="btn-primary" style="background:#16a34a; flex:1; padding:8px 10px; font-size:12px;" id="btnAceitarTransf">
+          ✅ Aceitar
+        </button>
+        <button class="danger" style="flex:1; padding:8px 10px; font-size:12px;" id="btnRecusarTransf">
+          ❌ Recusar
+        </button>
       </div>
     </div>
-  `);
+  `, true);
+
+  m.querySelector("#btnAceitarTransf").onclick = () => {
+    document.querySelectorAll(".modal").forEach(el => el.remove());
+    const tr = db.transferencias.find(x => x.idDoc === t.idDoc);
+    if (tr) tr.status = "aceito";
+    aceitarTransferencia(t.idDoc, t.batchId);
+  };
+
+  m.querySelector("#btnRecusarTransf").onclick = () => {
+    document.querySelectorAll(".modal").forEach(el => el.remove());
+    const tr = db.transferencias.find(x => x.idDoc === t.idDoc);
+    if (tr) tr.status = "recusado";
+    recusarTransferencia(t.idDoc);
+  };
 }
 
-function aceitarTransferencia(idDocTransf, batchId) {
-  firestore.collection("transferencias").doc(idDocTransf).update({ status: "aceito" });
+async function aceitarTransferencia(idDocTransf, batchId) {
+  try {
+    firestore.collection("transferencias").doc(idDocTransf).update({ status: "aceito" });
 
-  db.emprestimos.filter(x => (x.batchId || x.id) === batchId).forEach(item => {
-    firestore.collection("emprestimos").doc(item.idDoc).update({ userId: user.id, userName: user.name });
-  });
+    const empItems = db.emprestimos.filter(x => (x.batchId || x.id) === batchId);
+    const resItems = db.reservas.filter(x => (x.batchId || x.id) === batchId);
 
-  db.reservas.filter(x => (x.batchId || x.id) === batchId).forEach(item => {
-    firestore.collection("reservas").doc(item.idDoc).update({ userId: user.id, userName: user.name });
-  });
+    empItems.forEach(item => {
+      item.userId = user.id || user.idDoc;
+      item.userName = user.name;
+      firestore.collection("emprestimos").doc(item.idDoc).update({ 
+        userId: user.id || user.idDoc, 
+        userName: user.name 
+      });
+    });
 
-  alert("Transferência concluída com sucesso! As máquinas agora estão sob sua responsabilidade.");
-  location.reload();
+    resItems.forEach(item => {
+      item.userId = user.id || user.idDoc;
+      item.userName = user.name;
+      firestore.collection("reservas").doc(item.idDoc).update({ 
+        userId: user.id || user.idDoc, 
+        userName: user.name 
+      });
+    });
+  } catch (err) {
+    console.error("Erro ao transferir:", err);
+  }
 }
 
-function recusarTransferencia(idDocTransf) {
-  firestore.collection("transferencias").doc(idDocTransf).update({ status: "recusado" });
-  alert("Transferência recusada.");
-  location.reload();
+async function recusarTransferencia(idDocTransf) {
+  try {
+    firestore.collection("transferencias").doc(idDocTransf).update({ status: "recusado" });
+  } catch (err) {
+    console.error("Erro ao recusar:", err);
+  }
 }
 
 function encerrarEmprestimosApos1310() {
@@ -1332,9 +1577,20 @@ function modalMaquinasExtras(batchId) {
   const userName = loteReservas[0].userName;
 
   const disponiveis = availInLessons(data, aulas, tipo, seg, batchId);
-  const maxPermitidoExtra = Math.min(4, disponiveis.length);
+  
+  let limiteExtrasPermitido = disponiveis.length;
+  if (aulas.includes(6)) {
+    const res7a = db.reservas.filter(r => r.date === data && Number(r.lesson) === 6 && r.status === "confirmed" && (r.batchId || r.id) !== batchId);
+    const jaReservadas7a = new Set(res7a.map(r => r.equipment)).size;
+    const saldoGeral7a = Math.max(0, 25 - jaReservadas7a);
+    limiteExtrasPermitido = Math.min(disponiveis.length, saldoGeral7a);
+  }
 
-  if (maxPermitidoExtra <= 0) return alert("Não há máquinas livres adicionais para esse horário.");
+  const maxPermitidoExtra = Math.min(4, limiteExtrasPermitido);
+
+  if (maxPermitidoExtra <= 0) {
+    return alert(aulas.includes(6) ? "A 7ª aula já atingiu o limite global de 25 máquinas reservadas para a escola." : "Não há máquinas livres adicionais para esse horário.");
+  }
 
   const m = modal(`
     <div class="modal-top">
@@ -1361,6 +1617,7 @@ function modalMaquinasExtras(batchId) {
     const motivo = $("motivoExtra").value.trim();
 
     if (qtn > 4) return alert("O limite máximo é de 4 máquinas extras por solicitação.");
+    if (qtn > maxPermitidoExtra) return alert(`No momento só há saldo de ${maxPermitidoExtra} máquina(s) disponível(is).`);
     if (!motivo) return alert("Por favor, preencha o motivo do pedido extra.");
 
     const novas = disponiveis.slice(0, qtn);
@@ -1492,19 +1749,26 @@ function abrirFormularioReserva({ batchId, date, type, qty, selectedLessons, pur
     }
 
     const tem7Aula = selected.includes(6);
-    const tetoRegra = tem7Aula ? 25 : 30;
-    
-    $("lblQty").querySelector("input").previousSibling.textContent = `Quantidade ${isAdm ? "(Sem limite)" : `(Máx. ${tetoRegra})`}`;
+
+    const res7a = db.reservas.filter(r => r.date === d && Number(r.lesson) === 6 && r.status === "confirmed" && (r.batchId || r.id) !== batchId);
+    const jaReservadas7a = new Set(res7a.map(r => r.equipment)).size;
+    const saldoGeral7a = Math.max(0, 25 - jaReservadas7a);
+
+    $("lblQty").querySelector("input").previousSibling.textContent = `Quantidade ${isAdm ? "(Sem limite)" : (tem7Aula ? `(Restam ${saldoGeral7a} de 25 no geral da escola)` : "(Máx. 30)")}`;
 
     const availMachines = availInLessons(d, selected, t, seg, batchId);
+    const tetoRegra = tem7Aula ? saldoGeral7a : 30;
     const maxPermitido = isAdm ? availMachines.length : Math.min(tetoRegra, availMachines.length);
     $("rq").max = Math.max(1, maxPermitido);
 
     if (availMachines.length === 0) {
       $("ri").textContent = `Sem equipamentos disponíveis nos horários selecionados para este segmento.`;
       $("ri").className = "notice danger-notice";
+    } else if (tem7Aula && saldoGeral7a <= 0 && !isAdm) {
+      $("ri").textContent = `A 7ª aula já atingiu o limite máximo global de 25 máquinas reservadas para toda a escola.`;
+      $("ri").className = "notice danger-notice";
     } else {
-      $("ri").textContent = `${selected.length} horário(s) selecionado(s). Máquinas livres: até ${maxPermitido}${tem7Aula ? " (Limite da 7ª Aula: 25)" : ""}.`;
+      $("ri").textContent = `${selected.length} horário(s) selecionado(s). Máquinas livres: até ${maxPermitido}${tem7Aula ? ` (Limite geral da 7ª Aula: ${saldoGeral7a} vaga(s) disponível(is) para toda a escola)` : ""}.`;
       $("ri").className = "notice";
     }
   };
@@ -1546,9 +1810,14 @@ function abrirFormularioReserva({ batchId, date, type, qty, selectedLessons, pur
     if (selectedLessons.length === 0) return alert("Selecione pelo menos 1 horário.");
     if (selectedLessons.length > 6) return alert("Você só pode escolher no máximo 6 horários.");
 
-    const limiteMaximo = selectedLessons.includes(6) ? 25 : 30;
-    if (!isAdm && newQty > limiteMaximo) {
-      return alert(`Para a 7ª aula, o limite máximo permitido é de ${limiteMaximo} máquinas.`);
+    if (selectedLessons.includes(6)) {
+      const res7a = db.reservas.filter(r => r.date === d && Number(r.lesson) === 6 && r.status === "confirmed" && (r.batchId || r.id) !== batchId);
+      const jaReservadas7a = new Set(res7a.map(r => r.equipment)).size;
+      const saldoGeral7a = Math.max(0, 25 - jaReservadas7a);
+
+      if (!isAdm && newQty > saldoGeral7a) {
+        return alert(`A 7ª aula possui um limite GLOBAL de 25 máquinas para toda a escola. Já existem ${jaReservadas7a} máquina(s) reservada(s) por outros professores. Restam apenas ${saldoGeral7a} vaga(s).`);
+      }
     }
 
     const availMachines = availInLessons(d, selectedLessons, t, seg, batchId);
@@ -1635,10 +1904,10 @@ function delBlock(idDoc) {
   firestore.collection("bloqueios").doc(idDoc).delete();
 }
 
-function modal(html) {
+function modal(html, isSmall = false) {
   const m = document.createElement("div");
   m.className = "modal";
-  m.innerHTML = `<div class="modal-box">${html}</div>`;
+  m.innerHTML = `<div class="modal-box ${isSmall ? 'modal-box-sm' : ''}">${html}</div>`;
   document.body.appendChild(m);
   return m;
 }
