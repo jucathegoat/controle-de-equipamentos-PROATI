@@ -15,7 +15,7 @@ const firestore = firebase.firestore();
 
 const SESSION_KEY = "controle_sessao_v2";
 
-// CAPTURA DO BOTAO DE INSTALAÇÃO AUTOMÁTICA (PWA)
+// CAPTURA DO BOTÃO DE INSTALAÇÃO AUTOMÁTICA (PWA)
 let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
@@ -298,6 +298,11 @@ function modalPWAInstalacao() {
     <div class="modal-top">
       <h2>📲 Adicionar Atalho do Sistema</h2>
     </div>
+
+    <div class="notice danger-notice" style="margin-bottom:12px; font-size:13px; border-left:4px solid #ef4444; background:#fef2f2; padding:10px; border-radius:6px; color:#991b1b;">
+      ⚠️ <b>ATENÇÃO:</b> Utilize preferencialmente o navegador <b>GOOGLE CHROME</b>.<br>
+      ❌ Caso você não esteja usando o Google Chrome ou encontre qualquer dificuldade, <b>consulte o PROATI!</b>
+    </div>
     
     ${deferredPrompt ? `
       <div style="text-align:center; padding:10px 0;">
@@ -322,8 +327,13 @@ function modalPWAInstalacao() {
       </div>
     ` : `
       <div style="font-size:13px; color:#334155; line-height:1.5;">
-        <p><b>No Computador / Notebook:</b></p>
-        <p>Clique nos <b>3 pontinhos (⋮)</b> do navegador > <b>Salvar e compartilhar</b> > <b>Instalar aplicativo</b>.</p>
+        <p><b>Passo a passo no Notebook (GOOGLE CHROME):</b></p>
+        <ol style="padding-left:20px; margin:10px 0; line-height:1.6;">
+          <li>Certifique-se de estar usando o navegador <b>GOOGLE CHROME</b>.</li>
+          <li>Clique nos <b>3 pontinhos (⋮)</b> no canto superior direito.</li>
+          <li>Passe o mouse em <b>"Transmitir, guardar e partilhar"</b> (ou <i>Salvar e compartilhar</i>).</li>
+          <li>Clique em <b>"Instalar página como app..."</b> ou <b>"Criar atalho..."</b>.</li>
+        </ol>
         <button class="btn-primary" style="margin-top:12px; width:100%; background:#2563eb;" onclick="concluirTutorialPWA()">
           ✅ Entendi / Continuar
         </button>
