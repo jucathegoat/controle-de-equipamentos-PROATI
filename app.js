@@ -504,7 +504,6 @@ function nav(page) {
   }
 }
 
-// FUNÇÃO DE AGENDAMENTO RÁPIDO
 function modalAgendamentoRapido() {
   const d = new Date();
   const dia = String(d.getDate()).padStart(2, '0');
@@ -814,6 +813,12 @@ function modalAtribuirMaquinasPedido(batchId) {
       </div>
     </div>
 
+    <!-- CAMPO DE SELEÇÃO RÁPIDA VIA TECLADO (ENTER) -->
+    <div style="margin-bottom:12px;">
+      <label style="font-size:12px; font-weight:bold; color:#475569; display:block; margin-bottom:4px;">⌨️ Seleção Rápida por Número/ID (Pressione Enter):</label>
+      <input type="text" id="inpQuickAddMachine" placeholder="Digite o número (ex: 5, TAB5, SA3) e aperte Enter..." style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid #2563eb; font-weight:bold; box-sizing:border-box;">
+    </div>
+
     <div style="margin-bottom:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
       <button type="button" id="btnAutoSelectFirst" class="btn-primary" style="font-size:12px; padding:6px 12px; background:#16a34a;">
         ⚡ Auto-selecionar Primeiras ${qtdNecessaria} deste Tipo
@@ -880,6 +885,55 @@ function modalAtribuirMaquinasPedido(batchId) {
 
     renderGrid();
   };
+
+  // LOGICA DO CAMPO DIGITAR E PRESSIONAR ENTER
+  const inpQuick = m.querySelector("#inpQuickAddMachine");
+  if (inpQuick) {
+    setTimeout(() => inpQuick.focus(), 100);
+    inpQuick.onkeydown = e => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const rawVal = inpQuick.value.trim().toUpperCase();
+        if (!rawVal) return;
+
+        // Procura ID exato ou prefixado pelo modelo atualmente ativo
+        let targetMaq = db.machines.find(maq => maq.id.toUpperCase() === rawVal);
+        if (!targetMaq) {
+          targetMaq = db.machines.find(maq => maq.id.toUpperCase() === (modeloAtual + rawVal));
+        }
+
+        if (!targetMaq) {
+          alert(`Máquina "${rawVal}" não foi encontrada!`);
+          inpQuick.value = "";
+          return;
+        }
+
+        const idMaq = targetMaq.id;
+        if (maquinasSelecionadas.includes(idMaq)) {
+          maquinasSelecionadas = maquinasSelecionadas.filter(x => x !== idMaq);
+        } else {
+          if (maquinasSelecionadas.length >= qtdNecessaria) {
+            alert(`Você já selecionou a quantidade necessária de ${qtdNecessaria} máquina(s)!`);
+            inpQuick.value = "";
+            return;
+          }
+          maquinasSelecionadas.push(idMaq);
+        }
+
+        // Caso a máquina digitada pertença a outro modelo, troca a aba visual automaticamente
+        if (targetMaq.model !== modeloAtual) {
+          modeloAtual = targetMaq.model;
+          m.querySelectorAll(".btn-model-filter").forEach(b => {
+            b.classList.toggle("active", b.dataset.model === modeloAtual);
+          });
+        }
+
+        inpQuick.value = "";
+        atualizarModalUI();
+        inpQuick.focus();
+      }
+    };
+  }
 
   m.querySelectorAll(".btn-model-filter").forEach(btn => {
     btn.onclick = () => {
