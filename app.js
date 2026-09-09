@@ -1965,3 +1965,87 @@ function modal(html, isSmall = false) {
   document.body.appendChild(m);
   return m;
 }
+
+//Primeiro acesso
+
+function modalPrimeiroAcesso() {
+  const m = modal(`
+    <div class="modal-top">
+      <h2>🆕 Primeiro Acesso - Cadastro de Professor</h2>
+      <button class="close">&times;</button>
+    </div>
+    <form id="fPrimeiroAcesso">
+      <div class="notice" style="margin-bottom:12px; font-size:13px;">
+        Preencha os dados abaixo para criar sua conta de <b>Professor</b> no sistema.
+      </div>
+      <div class="form-grid">
+        <label>Nome Completo
+          <input id="paNome" placeholder="Ex: Maria Souza" required>
+        </label>
+        <label>Usuário de Login
+          <input id="paLogin" placeholder="Ex: prof.maria" required>
+        </label>
+        <label>Senha (Exatamente 4 números)
+          <input id="paSenha" type="password" maxlength="4" pattern="\\d{4}" placeholder="Ex: 1234" required>
+        </label>
+      </div>
+      <button type="submit" class="btn-primary" style="margin-top:18px; width:100%">
+        ✅ Criar Minha Conta
+      </button>
+    </form>
+  `);
+
+  // Garante que a senha receba apenas números
+  m.querySelector("#paSenha").addEventListener("input", e => {
+    e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4);
+  });
+
+  m.querySelector(".close").onclick = () => m.remove();
+
+  m.querySelector("#fPrimeiroAcesso").onsubmit = async e => {
+    e.preventDefault();
+
+    const nome = $("paNome").value.trim();
+    const userLogin = $("paLogin").value.trim().toLowerCase();
+    const pass = $("paSenha").value.trim();
+
+    if (pass.length !== 4 || isNaN(pass)) {
+      return alert("A senha deve conter exatamente 4 números.");
+    }
+
+    // Verifica se o usuário já existe na base de dados
+    const usuarioExistente = db.users.find(u => 
+      (u.userLogin && u.userLogin.toLowerCase() === userLogin) || 
+      u.name.toLowerCase() === nome.toLowerCase()
+    );
+
+    if (usuarioExistente) {
+      return alert("Este usuário ou nome já está cadastrado no sistema. Tente fazer o login ou recupere com a coordenação.");
+    }
+
+    try {
+      // Salva o novo professor no Firestore com role fixo "professor"
+      const docRef = await firestore.collection("users").add({
+        id: uid(),
+        name: nome,
+        userLogin: userLogin,
+        pass: pass,
+        role: "professor",
+        createdAt: nowFormatted()
+      });
+
+      alert("Conta criada com sucesso! Você já pode fazer o login.");
+      
+      // Preenche o campo de login automaticamente para facilitar
+      $("loginUser").value = userLogin;
+      $("loginPass").focus();
+
+      m.remove();
+    } catch (err) {
+      alert("Erro ao criar cadastro: " + err.message);
+    }
+  };
+}
+
+// Torna a função global para o botão HTML encontrar
+window.modalPrimeiroAcesso = modalPrimeiroAcesso;
