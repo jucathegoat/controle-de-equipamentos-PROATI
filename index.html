@@ -1,54 +1,74 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Controle de Equipamentos - E.M. Maria Olímpia</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reserva de Equipamentos - Escola Maria Olímpia</title>
+
+  <!-- SDKs do Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <!-- CSS Externo -->
   <link rel="stylesheet" href="style.css">
-  
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
-  <div id="login" class="login">
-    <div class="login-card">
-      <div class="logo">💻</div>
-      <h1>Controle de Equipamentos</h1>
-      <p>Escola Maria Olímpia de Souza Queiroz Maciel</p>
+
+  <!-- TELA DE LOGIN -->
+  <div id="login" class="login-container">
+    <div class="card login-card">
+      <div style="text-align: center; margin-bottom: 16px;">
+        <span style="font-size: 32px;">💻</span>
+        <h2 style="margin: 8px 0 4px 0; font-size: 20px; font-weight: 700;">Controle de Equipamentos</h2>
+        <div style="color: #64748b; font-size: 13px;">Escola Maria Olímpia de Souza Queiroz Maciel</div>
+      </div>
+
       <form id="loginForm">
-        <label>Usuário
-          <input id="loginUser" required>
+        <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px;">
+          Usuário
+          <input id="loginUser" placeholder="Digite seu usuário" required style="width: 100%; margin-top: 4px;">
         </label>
-        <label>Senha
-          <input id="loginPass" type="password" required placeholder="Max. 4">
+
+        <label style="display: block; font-size: 13px; font-weight: 600; margin-top: 12px; margin-bottom: 4px;">
+          Senha
+          <input id="loginPass" type="password" maxlength="4" placeholder="Max. 4" required style="width: 100%; margin-top: 4px;">
         </label>
-        <button type="submit" class="btn-primary" style="width:100%; margin-top:10px;">Entrar no Sistema</button>
-        <div id="loginError" class="error"></div>
+
+        <div id="loginError" style="color: #ef4444; font-size: 12px; margin-top: 8px; text-align: center;"></div>
+
+        <button type="submit" class="btn-primary" style="width: 100%; margin-top: 16px; padding: 12px; font-size: 14px;">
+          Entrar no Sistema
+        </button>
       </form>
-      <small>Sistema Sincronizado em Nuvem</small>
+
+      <div style="text-align: center; margin-top: 14px;">
+        <small style="color: #64748b; font-size: 11px;">Sistema Sincronizado em Nuvem</small>
+      </div>
+
+      <!-- BOTÃO DENTRO DO CARD DE LOGIN (DESAPARECE JUNTO COM O LOGIN) -->
+      <button type="button" id="btnLinkPrimeiroAcesso" onclick="modalPrimeiroAcesso()">
+        🆓 Primeiro Acesso? Cadastre-se aqui
+      </button>
     </div>
   </div>
 
+  <!-- TELA PRINCIPAL DO APLICATIVO -->
   <div id="app" class="hidden">
     <header>
-      <strong>💻 Reserva de Equipamentos</strong>
-      <div>
-        <span id="who"></span>
-        <button id="logout" class="secondary">Sair</button>
+      <div style="font-weight: 700; font-size: 16px; color: #4f46e5;">💻 Reserva de Equipamentos</div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span id="who" style="font-size: 13px; font-weight: 600; color: #334155;"></span>
+        <button id="logout" class="secondary" style="min-height: 32px; padding: 6px 12px;">Sair</button>
       </div>
     </header>
+
     <div class="layout">
       <nav id="nav"></nav>
       <main id="main"></main>
     </div>
   </div>
 
-  <button type="button" class="secondary" style="width:100%; margin-top:10px;" onclick="modalPrimeiroAcesso()">
-  🆕 Primeiro Acesso? Cadastre-se aqui
-</button>
-
+  <!-- JavaScript Externo -->
   <script src="app.js"></script>
 </body>
 </html>
-
