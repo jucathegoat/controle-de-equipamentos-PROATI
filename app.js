@@ -2191,3 +2191,107 @@ function modal(html, isSmall = false) {
   document.body.appendChild(m);
   return m;
 }
+
+function modalPWAInstalacao() {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+  const m = modal(`
+    <div class="modal-top" style="display:flex; justify-content:space-between; align-items:center;">
+      <h2>📲 Adicionar Atalho do Sistema</h2>
+      <button class="close">&times;</button>
+    </div>
+
+    <div class="notice danger-notice" style="margin-bottom:12px; font-size:13px; border-left:4px solid #ef4444; background:#fef2f2; padding:10px; border-radius:6px; color:#991b1b;">
+      ⚠️ <b>ATENÇÃO:</b> Utilize preferencialmente o navegador <b>GOOGLE CHROME</b>.<br>
+      ❌ Caso não esteja usando o Google Chrome, <b>consulte o PROATI!</b>
+    </div>
+    
+    ${deferredPrompt ? `
+      <div style="text-align:center; padding:10px 0;">
+        <button id="btnInstalarAuto" class="btn-primary" style="background:#10b981; font-size:15px; padding:12px; width:100%;">
+          ⚡ Criar Atalho na Tela Inicial
+        </button>
+      </div>
+    ` : isIOS ? `
+      <div style="font-size:13px; color:#334155;">
+        <p><b>No Safari (iPhone/iPad):</b> Toque no botão <b>Compartilhar (⎘)</b> e depois em <b>Adicionar à Tela de Início</b>.</p>
+        <button class="btn-primary" style="margin-top:12px; width:100%;" onclick="concluirTutorialPWA()">
+          ✅ Continuar
+        </button>
+      </div>
+    ` : `
+      <div style="font-size:13px; color:#334155;">
+        <p><b>No Google Chrome:</b> Clique nos <b>3 pontinhos (⋮)</b> no canto superior direito > <b>Instalar aplicativo</b> ou <b>Adicionar à tela inicial</b>.</p>
+        <button class="btn-primary" style="margin-top:12px; width:100%;" onclick="concluirTutorialPWA()">
+          ✅ Entendi
+        </button>
+      </div>
+    `}
+  `);
+
+  const closeBtn = m.querySelector(".close");
+  if (closeBtn) closeBtn.onclick = () => m.remove();
+
+  const btnAuto = document.getElementById("btnInstalarAuto");
+  if (btnAuto) {
+    btnAuto.onclick = async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') concluirTutorialPWA();
+        deferredPrompt = null;
+      }
+    };
+  }
+}
+window.modalPWAInstalacao = modalPWAInstalacao;
+
+function dashboard() {
+  const hoje = new Date().toISOString().split("T")[0];
+  const resHoje = db.reservas.filter(r => r.date === hoje && r.status === "confirmed");
+  const noteResHojeUnique = new Set(resHoje.filter(r => r.type === "notebook").map(r => r.equipment)).size;
+  const tabResHojeUnique = new Set(resHoje.filter(r => r.type === "tablet").map(r => r.equipment)).size;
+
+  const userRes = db.reservas.filter(r => r.userId === user.id && r.status === "confirmed");
+  const userBatchesCount = new Set(userRes.map(r => r.batchId || r.id)).size;
+  const empAtivos = new Set(db.emprestimos.filter(x => x.status === "retirado").map(x => x.equipment)).size;
+
+  $("main").innerHTML = `
+    <div class="head">
+      <div>
+        <h2>Painel Principal</h2>
+        <div class="muted">Escola Maria Olímpia de Souza Queiroz Maciel · Total: 157 máq. (146 Notebooks / 11 Tablets)</div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="secondary" onclick="modalPWAInstalacao()">📲 Criar Atalho</button>
+        <button class="ok" onclick="modalAgendamentoRapido()">⚡ Agendamento Rápido</button>
+        <button class="btn-primary" onclick="modalReserva()">+ Nova Reserva</button>
+        <button class="secondary" onclick="modalReportDefeito()">🛠️ Reportar Defeito</button>
+        ${user.role === "admin" ? `<button class="danger" onclick="encerrarEmprestimosApos1310()">⏰ Encerrar Empréstimos (13:10)</button>` : ''}
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card stat">
+        <span>💻 Notebooks Agendados Hoje</span>
+        <b>${noteResHojeUnique} / 146 máq.</b>
+      </div>
+      <div class="card stat">
+        <span>📱 Tablets Agendados Hoje</span>
+        <b>${tabResHojeUnique} / 11 máq.</b>
+      </div>
+      <div class="card stat">
+        <span>📅 Seus Lotes de Reserva</span>
+        <b>${userBatchesCount}</b>
+      </div>
+      <div class="card stat">
+        <span>📦 Empréstimos Ativos</span>
+        <b>${empAtivos} máq.</b>
+      </div>
+    </div>
+
+    <div class="card section" style="margin-top:16px;">
+      <h3>🔴 Retiradas do Dia (${hoje.split('-').reverse().join('/')}) — Transparência Pública</h3>
+      ${usoTabela()}
+    </div>`;
+}
