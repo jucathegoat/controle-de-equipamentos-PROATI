@@ -530,25 +530,32 @@ function avarias() {
 }
 
 function atualizarFiltroAvarias() {
-  const query = $("searchMachine").value.trim().toLowerCase();
-  const status = $("filterStatus").value;
-  $("avariasTableContainer").innerHTML = renderizarTabelaAvarias(query, status);
+  const query = $("searchMachine") ? $("searchMachine").value.trim().toLowerCase() : "";
+  const status = $("filterStatus") ? $("filterStatus").value : "todos";
+  const container = $("avariasTableContainer");
+  if (container) container.innerHTML = renderizarTabelaAvarias(query, status);
 }
 
 function renderizarTabelaAvarias(query = "", filterStatus = "todos") {
-  let lista = db.reports;
+  let lista = db.reports || [];
 
   if (filterStatus !== "todos") {
-    lista = lista.filter(r => r.status === filterStatus);
+    lista = lista.filter(r => r && r.status === filterStatus);
   }
 
   if (query) {
-    lista = lista.filter(r => 
-      (r.number && r.number.toLowerCase().includes(query)) ||
-      (r.model && r.model.toLowerCase().includes(query)) ||
-      (r.description && r.description.toLowerCase().includes(query)) ||
-      (r.reporterName && r.reporterName.toLowerCase().includes(query))
-    );
+    lista = lista.filter(r => {
+      if (!r) return false;
+      const numStr = (r.number || "").toLowerCase();
+      const modelStr = (r.model || "").toLowerCase();
+      const descStr = (r.description || "").toLowerCase();
+      const reporterStr = (r.reporterName || "").toLowerCase();
+
+      return numStr.includes(query) ||
+             modelStr.includes(query) ||
+             descStr.includes(query) ||
+             reporterStr.includes(query);
+    });
   }
 
   return `
@@ -568,12 +575,12 @@ function renderizarTabelaAvarias(query = "", filterStatus = "todos") {
           </tr>
           ${lista.map(r => `
             <tr>
-              <td><b>[${r.model}] Nº ${esc(r.number)}</b></td>
+              <td><b>[${esc(r.model)}] Nº ${esc(r.number)}</b></td>
               <td>${r.batchId ? `<small class="pill reserved">${esc(r.batchId)}</small>` : `<span class="muted">Avulso</span>`}</td>
               <td>${esc(r.description)}</td>
               <td>${r.mediaUrl ? `<a href="${r.mediaUrl}" target="_blank" style="color:#4f46e5; font-weight:bold;">🖼️ Mídia</a>` : `<span class="muted">Sem mídia</span>`}</td>
               <td><b>👤 ${esc(r.reporterName)}</b></td>
-              <td><small class="muted">${r.createdAt}</small></td>
+              <td><small class="muted">${esc(r.createdAt)}</small></td>
               <td>
                 ${r.adminComment ? `
                   <div style="background:#f1f5f9; border-left:3px solid #4f46e5; padding:6px 10px; border-radius:4px; font-size:12px;">
@@ -643,14 +650,17 @@ function modalResponderReport(idDoc) {
   };
 }
 
-function renderizarOpcoesHorario(segmentoKey) {
+function renderizarOpcoesHorario(segmentoKey, selectedIndices = []) {
   const lista = TABELAS_HORARIOS[segmentoKey] || TABELAS_HORARIOS["6_7"];
-  return lista.map((x, i) => `
-    <label class="lesson-checkbox" style="display:flex; align-items:center; gap:8px; padding:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; cursor:pointer;">
-      <input type="checkbox" name="lessonCheck" value="${i}">
-      <span><b>${x.label}</b> <small style="color:#64748b;">${x.start}–${x.end}</small></span>
-    </label>
-  `).join("");
+  return lista.map((x, i) => {
+    const isChecked = selectedIndices.includes(i);
+    return `
+      <label class="lesson-checkbox ${isChecked ? 'checked' : ''}" style="display:flex; align-items:center; gap:8px; padding:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; cursor:pointer;">
+        <input type="checkbox" name="lessonCheck" value="${i}" ${isChecked ? 'checked' : ''}>
+        <span><b>${x.label}</b> <small style="color:#64748b;">${x.start}–${x.end}</small></span>
+      </label>
+    `;
+  }).join("");
 }
 
 function solicitacoes() {
@@ -688,35 +698,58 @@ function solicitacoes() {
       </div>
     </div>`;
 
-  $("searchSolicitacao").addEventListener("input", atualizarFiltroSolicitacoes);
-  $("filterProfSolicitacao").addEventListener("change", atualizarFiltroSolicitacoes);
-  $("filterDataSolicitacao").addEventListener("change", atualizarFiltroSolicitacoes);
-  $("filterStatusSolicitacao").addEventListener("change", atualizarFiltroSolicitacoes);
+  const safeAddEvent = (id, event, fn) => {
+    const el = $(id);
+    if (el) el.addEventListener(event, fn);
+  };
+
+  safeAddEvent("searchSolicitacao", "input", atualizarFiltroSolicitacoes);
+  safeAddEvent("filterProfSolicitacao", "change", atualizarFiltroSolicitacoes);
+  safeAddEvent("filterDataSolicitacao", "change", atualizarFiltroSolicitacoes);
+  safeAddEvent("filterStatusSolicitacao", "change", atualizarFiltroSolicitacoes);
 }
 
 function atualizarFiltroSolicitacoes() {
-  const query = $("searchSolicitacao").value.trim().toLowerCase();
-  const prof = $("filterProfSolicitacao").value;
-  const dataUso = $("filterDataSolicitacao").value;
-  const status = $("filterStatusSolicitacao").value;
+  const container = $("solicitacoesTableContainer");
+  if (!container) return;
 
-  $("solicitacoesTableContainer").innerHTML = renderizarTabelaSolicitacoes(query, prof, dataUso, status);
+  const query = $("searchSolicitacao") ? $("searchSolicitacao").value.trim().toLowerCase() : "";
+  const prof = $("filterProfSolicitacao") ? $("filterProfSolicitacao").value : "todos";
+  const dataUso = $("filterDataSolicitacao") ? $("filterDataSolicitacao").value : "";
+  const status = $("filterStatusSolicitacao") ? $("filterStatusSolicitacao").value : "todos";
+
+  container.innerHTML = renderizarTabelaSolicitacoes(query, prof, dataUso, status);
 }
 
 function renderizarTabelaSolicitacoes(query = "", filterProf = "todos", filterData = "", filterStatus = "todos") {
-  const raw = user.role === "admin" ? db.emprestimos : db.emprestimos.filter(x => x.userId === user.id);
+  const raw = user.role === "admin" ? db.emprestimos : db.emprestimos.filter(x => x && x.userId === user.id);
   const groups = {};
-  raw.forEach(x => {
+  
+  (raw || []).forEach(x => {
+    if (!x) return;
     const bid = x.batchId || x.id;
-    if (!groups[bid]) groups[bid] = { batchId: bid, userId: x.userId, userName: x.userName, date: x.date, lessons: new Set(), equipments: new Set(), statuses: new Set(), createdAt: x.createdAt || "Data não registrada" };
-    groups[bid].lessons.add(x.lesson);
-    groups[bid].equipments.add(x.equipment);
-    groups[bid].statuses.add(x.status);
+    if (!bid) return;
+
+    if (!groups[bid]) {
+      groups[bid] = { 
+        batchId: bid, 
+        userId: x.userId, 
+        userName: x.userName || "Usuário não identificado", 
+        date: x.date || "", 
+        lessons: new Set(), 
+        equipments: new Set(), 
+        statuses: new Set(), 
+        createdAt: x.createdAt || "Data não registrada" 
+      };
+    }
+    if (x.lesson) groups[bid].lessons.add(x.lesson);
+    if (x.equipment) groups[bid].equipments.add(x.equipment);
+    if (x.status) groups[bid].statuses.add(x.status);
   });
 
-  let groupArray = Object.values(groups).sort((a, b) => b.date.localeCompare(a.date));
+  let groupArray = Object.values(groups).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
-  if (filterProf !== "todos") {
+  if (filterProf && filterProf !== "todos") {
     groupArray = groupArray.filter(g => g.userName === filterProf);
   }
 
@@ -724,7 +757,7 @@ function renderizarTabelaSolicitacoes(query = "", filterProf = "todos", filterDa
     groupArray = groupArray.filter(g => g.date === filterData);
   }
 
-  if (filterStatus !== "todos") {
+  if (filterStatus && filterStatus !== "todos") {
     groupArray = groupArray.filter(g => {
       const isRetirado = g.statuses.has("retirado");
       const isAguardando = g.statuses.has("aguardando");
@@ -740,10 +773,14 @@ function renderizarTabelaSolicitacoes(query = "", filterProf = "todos", filterDa
   if (query) {
     groupArray = groupArray.filter(g => {
       const eqStr = Array.from(g.equipments).join(" ").toLowerCase();
-      return g.userName.toLowerCase().includes(query) ||
-             g.batchId.toLowerCase().includes(query) ||
+      const userNameStr = (g.userName || "").toLowerCase();
+      const batchIdStr = (g.batchId || "").toLowerCase();
+      const dateStr = g.date || "";
+
+      return userNameStr.includes(query) ||
+             batchIdStr.includes(query) ||
              eqStr.includes(query) ||
-             g.date.includes(query);
+             dateStr.includes(query);
     });
   }
 
@@ -765,14 +802,15 @@ function renderizarTabelaSolicitacoes(query = "", filterProf = "todos", filterDa
             const listaIds = Array.from(g.equipments);
             const exibeIds = isRetirado || isDevolvido ? listaIds.join(", ") : "Pendente Entrega";
             const podeAtribuir = user.role === "admin" || user.id === g.userId;
+            const dataFmt = g.date ? g.date.split('-').reverse().join('/') : "—";
 
             return `<tr>
               <td><b>👤 ${esc(g.userName)}</b></td>
-              <td><b>${g.date.split('-').reverse().join('/')}</b></td>
+              <td><b>${dataFmt}</b></td>
               <td><span class="pill reserved">${Array.from(g.lessons).join(", ")}</span></td>
               <td><b>${g.equipments.size} máq.</b></td>
-              <td><small><code>${exibeIds}</code></small></td>
-              <td><small class="muted">🕒 ${g.createdAt}</small></td>
+              <td><small><code>${esc(exibeIds)}</code></small></td>
+              <td><small class="muted">🕒 ${esc(g.createdAt)}</small></td>
               <td>${statusPill}</td>
               <td>
                 ${podeAtribuir && (isAguardando || isRetirado) ? `<button class="ok" onclick="modalAtribuirMaquinasPedido('${g.batchId}')">📌 Atribuir / Alterar Máquinas</button>` : ""}
@@ -970,15 +1008,16 @@ function devolverLoteRotativo(batchId) {
 }
 
 function usoTabela() {
-  const a = db.emprestimos.filter(x => x.status === "retirado");
+  const a = (db.emprestimos || []).filter(x => x && x.status === "retirado");
   if (!a.length) return `<p class="muted">Nenhum equipamento em uso no momento.</p>`;
 
   const groups = {};
   a.forEach(x => {
     const bid = x.batchId || x.id;
-    if (!groups[bid]) groups[bid] = { userName: x.userName, date: x.date, lessons: new Set(), equipments: new Set(), createdAt: x.createdAt || "Data não registrada" };
-    groups[bid].lessons.add(x.lesson);
-    groups[bid].equipments.add(x.equipment);
+    if (!bid) return;
+    if (!groups[bid]) groups[bid] = { userName: x.userName || "Não informado", date: x.date || "", lessons: new Set(), equipments: new Set(), createdAt: x.createdAt || "Data não registrada" };
+    if (x.lesson) groups[bid].lessons.add(x.lesson);
+    if (x.equipment) groups[bid].equipments.add(x.equipment);
   });
 
   return `
@@ -986,14 +1025,17 @@ function usoTabela() {
       <div class="table">
         <table>
           <tr><th>Professor Responsável</th><th>Qtd. Máquinas</th><th>IDs Atribuídos</th><th>Data do Uso</th><th>Horários</th><th>Data/Hora do Pedido</th></tr>
-          ${Object.values(groups).map(g => `<tr>
-            <td><b>👤 ${esc(g.userName)}</b></td>
-            <td><b>${g.equipments.size} máq.</b></td>
-            <td><code>${Array.from(g.equipments).join(", ")}</code></td>
-            <td>${g.date.split('-').reverse().join('/')}</td>
-            <td><span class="pill use">${Array.from(g.lessons).join(", ")}</span></td>
-            <td><small class="muted">🕒 ${g.createdAt}</small></td>
-          </tr>`).join("")}
+          ${Object.values(groups).map(g => {
+            const dataFmt = g.date ? g.date.split('-').reverse().join('/') : "—";
+            return `<tr>
+              <td><b>👤 ${esc(g.userName)}</b></td>
+              <td><b>${g.equipments.size} máq.</b></td>
+              <td><code>${esc(Array.from(g.equipments).join(", "))}</code></td>
+              <td>${dataFmt}</td>
+              <td><span class="pill use">${esc(Array.from(g.lessons).join(", "))}</span></td>
+              <td><small class="muted">🕒 ${esc(g.createdAt)}</small></td>
+            </tr>`;
+          }).join("")}
         </table>
       </div>
     </div>`;
@@ -1708,29 +1750,50 @@ function reservas() {
 }
 
 function atualizarFiltroReservas() {
-  const query = $("searchReserva").value.trim().toLowerCase();
-  const prof = $("filterProfReserva").value;
-  const dataRes = $("filterDataReserva").value;
+  const query = $("searchReserva") ? $("searchReserva").value.trim().toLowerCase() : "";
+  const prof = $("filterProfReserva") ? $("filterProfReserva").value : "todos";
+  const dataRes = $("filterDataReserva") ? $("filterDataReserva").value : "";
+  const container = $("reservasTableContainer");
 
-  $("reservasTableContainer").innerHTML = renderizarTabelaReservas(query, prof, dataRes);
+  if (container) container.innerHTML = renderizarTabelaReservas(query, prof, dataRes);
 }
 
 function renderizarTabelaReservas(query = "", filterProf = "todos", filterData = "") {
-  const raw = user.role === "admin" ? db.reservas : db.reservas.filter(x => x.userId === user.id);
+  const raw = user.role === "admin" ? db.reservas : db.reservas.filter(x => x && x.userId === user.id);
   const groups = {};
-  raw.forEach(r => {
+  
+  (raw || []).forEach(r => {
+    if (!r) return;
     const bid = r.batchId || r.id;
-    if (!groups[bid]) groups[bid] = { batchId: bid, userId: r.userId, userName: r.userName, date: r.date, type: r.type, segment: r.segment || "6_7", purpose: r.purpose, lessonsIndices: new Set(), lessonsNames: new Set(), equipments: new Set(), createdAt: r.createdAt || "Data não registrada" };
-    groups[bid].lessonsIndices.add(r.lesson);
-    const tabelaUsada = TABELAS_HORARIOS[r.segment || "6_7"] || TABELAS_HORARIOS["6_7"];
-    const slot = tabelaUsada[r.lesson];
-    groups[bid].lessonsNames.add(slot ? `${slot.label} (${slot.start}–${slot.end})` : r.lesson);
-    groups[bid].equipments.add(r.equipment);
+    if (!bid) return;
+
+    if (!groups[bid]) {
+      groups[bid] = { 
+        batchId: bid, 
+        userId: r.userId, 
+        userName: r.userName || "Usuário não identificado", 
+        date: r.date || "", 
+        type: r.type || "notebook", 
+        segment: r.segment || "6_7", 
+        purpose: r.purpose || "outros", 
+        lessonsIndices: new Set(), 
+        lessonsNames: new Set(), 
+        equipments: new Set(), 
+        createdAt: r.createdAt || "Data não registrada" 
+      };
+    }
+    if (r.lesson !== undefined) {
+      groups[bid].lessonsIndices.add(r.lesson);
+      const tabelaUsada = TABELAS_HORARIOS[r.segment || "6_7"] || TABELAS_HORARIOS["6_7"];
+      const slot = tabelaUsada[r.lesson];
+      groups[bid].lessonsNames.add(slot ? `${slot.label} (${slot.start}–${slot.end})` : r.lesson);
+    }
+    if (r.equipment) groups[bid].equipments.add(r.equipment);
   });
 
-  let groupArray = Object.values(groups).sort((a, b) => b.date.localeCompare(a.date));
+  let groupArray = Object.values(groups).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
-  if (filterProf !== "todos") {
+  if (filterProf && filterProf !== "todos") {
     groupArray = groupArray.filter(g => g.userName === filterProf);
   }
 
@@ -1743,11 +1806,15 @@ function renderizarTabelaReservas(query = "", filterProf = "todos", filterData =
       const eqStr = Array.from(g.equipments).join(" ").toLowerCase();
       const finObj = FINALIDADES.find(f => f.id === g.purpose);
       const finLabel = finObj ? finObj.label.toLowerCase() : "";
-      return g.userName.toLowerCase().includes(query) ||
-             g.batchId.toLowerCase().includes(query) ||
+      const userNameStr = (g.userName || "").toLowerCase();
+      const batchIdStr = (g.batchId || "").toLowerCase();
+      const dateStr = g.date || "";
+
+      return userNameStr.includes(query) ||
+             batchIdStr.includes(query) ||
              eqStr.includes(query) ||
              finLabel.includes(query) ||
-             g.date.includes(query);
+             dateStr.includes(query);
     });
   }
 
@@ -1759,17 +1826,19 @@ function renderizarTabelaReservas(query = "", filterProf = "todos", filterData =
           ${groupArray.map(g => {
             const finObj = FINALIDADES.find(f => f.id === g.purpose);
             const segLabel = g.segment === "8_9" ? "8º/9º Ano" : "6º/7º Ano";
+            const dataFmt = g.date ? g.date.split('-').reverse().join('/') : "—";
             return `<tr>
               <td><b>👤 ${esc(g.userName)}</b></td>
-              <td><b>${g.date.split('-').reverse().join('/')}</b></td>
+              <td><b>${dataFmt}</b></td>
               <td>${g.type === "tablet" ? "📱 Tablet" : "💻 Notebook"}</td>
               <td><small><b>${segLabel}</b></small></td>
               <td><small>${finObj ? finObj.label : '📌 Outros'}</small></td>
               <td><span class="pill reserved">${Array.from(g.lessonsNames).join(", ")}</span></td>
               <td><b>${g.equipments.size} máq.</b></td>
-              <td><small class="muted">🕒 ${g.createdAt}</small></td>
+              <td><small class="muted">🕒 ${esc(g.createdAt)}</small></td>
               <td>
                 ${(user.role === "admin" || user.id === g.userId) ? `
+                  <button class="secondary" onclick="editarReservaCompleta('${g.batchId}')">✏️ Editar Reserva</button>
                   <button class="ok" onclick="modalMaquinasExtras('${g.batchId}')">➕ Extra (Máx 5)</button>
                   <button class="danger" onclick="cancelarLote('${g.batchId}')">🗑️ Excluir</button>
                 ` : "—"}
@@ -1779,6 +1848,30 @@ function renderizarTabelaReservas(query = "", filterProf = "todos", filterData =
         </table>
       </div>
     </div>`;
+}
+
+function editarReservaCompleta(batchId) {
+  const loteReservas = db.reservas.filter(r => (r.batchId || r.id) === batchId);
+  if (!loteReservas.length) return alert("Reserva não encontrada.");
+
+  const isOwner = loteReservas.some(r => r.userId === user.id || r.userId === user.idDoc);
+  if (user.role !== "admin" && !isOwner) {
+    return alert("Você só pode editar suas próprias reservas.");
+  }
+
+  const exItem = loteReservas[0];
+  const qtyAtual = new Set(loteReservas.map(r => r.equipment)).size;
+  const selectedLessons = Array.from(new Set(loteReservas.map(r => parseInt(r.lesson, 10))));
+
+  abrirFormularioReserva({
+    batchId: batchId,
+    date: exItem.date,
+    type: exItem.type,
+    qty: qtyAtual,
+    selectedLessons: selectedLessons,
+    purpose: exItem.purpose,
+    segment: exItem.segment || "6_7"
+  });
 }
 
 function modalMaquinasExtras(batchId) {
@@ -1844,7 +1937,7 @@ function modalMaquinasExtras(batchId) {
 function gerarPlanilhaMensalCSV() {
   const mesAtual = String(calMonth + 1).padStart(2, "0");
   const anoAtual = calYear;
-  const transacoes = db.emprestimos.filter(x => x.date.startsWith(`${anoAtual}-${mesAtual}`));
+  const transacoes = db.emprestimos.filter(x => x.date && x.date.startsWith(`${anoAtual}-${mesAtual}`));
 
   if (!transacoes.length) return alert(`Nenhuma transação encontrada no mês ${mesAtual}/${anoAtual}.`);
 
@@ -1872,7 +1965,7 @@ function modalReserva(defaultDate = "") {
   abrirFormularioReserva({ batchId: null, date: defaultDate, type: "notebook", qty: 1, selectedLessons: [], purpose: "redacao", segment: "6_7" });
 }
 
-function abrirFormularioReserva({ batchId, date, type, qty, selectedLessons, purpose, segment }) {
+function abrirFormularioReserva({ batchId, date, type, qty, selectedLessons = [], purpose, segment }) {
   const hoje = date || new Date().toISOString().split("T")[0];
   const isAdm = user.role === "admin";
   const isEdit = !!batchId;
@@ -1922,7 +2015,7 @@ function abrirFormularioReserva({ batchId, date, type, qty, selectedLessons, pur
       <div style="margin-top:16px">
         <label style="margin-bottom:8px; font-weight:600; font-size:12px; display:block;">Selecione os Horários (Escolha de 1 até 6 horários):</label>
         <div class="lessons-selector" id="lessonsContainer">
-          ${renderizarOpcoesHorario(segAtual)}
+          ${renderizarOpcoesHorario(segAtual, selectedLessons)}
         </div>
       </div>
 
@@ -1971,7 +2064,7 @@ function abrirFormularioReserva({ batchId, date, type, qty, selectedLessons, pur
   bindCheckboxes();
 
   m.querySelector("#rsegment").addEventListener("change", e => {
-    $("lessonsContainer").innerHTML = renderizarOpcoesHorario(e.target.value);
+    $("lessonsContainer").innerHTML = renderizarOpcoesHorario(e.target.value, getSelectedLessons());
     bindCheckboxes();
     updateUI();
   });
@@ -1981,7 +2074,7 @@ function abrirFormularioReserva({ batchId, date, type, qty, selectedLessons, pur
 
   m.querySelector("#rf").onsubmit = async e => {
     e.preventDefault();
-    const selectedLessons = getSelectedLessons();
+    const currentSelectedLessons = getSelectedLessons();
     const d = $("rd").value;
     const seg = $("rsegment").value;
     const t = $("rt").value;
@@ -1990,7 +2083,7 @@ function abrirFormularioReserva({ batchId, date, type, qty, selectedLessons, pur
     const rawCustomMachines = $("rCustomMachines").value.trim();
 
     if (isPastDate(d) || isWeekend(d) || isHoliday(d)) return alert("Data inválida ou bloqueada pelo calendário.");
-    if (selectedLessons.length === 0) return alert("Selecione pelo menos 1 horário.");
+    if (currentSelectedLessons.length === 0) return alert("Selecione pelo menos 1 horário.");
     if (!isAdm && newQty > LIMITE_PROFESSOR) return alert(`O limite máximo permitido por reserva é de ${LIMITE_PROFESSOR} máquinas.`);
 
     let selecionadas = [];
@@ -2016,7 +2109,7 @@ function abrirFormularioReserva({ batchId, date, type, qty, selectedLessons, pur
     const horaCriacao = nowFormatted();
     const tabelaUsada = TABELAS_HORARIOS[seg] || TABELAS_HORARIOS["6_7"];
 
-    selectedLessons.forEach(l => {
+    currentSelectedLessons.forEach(l => {
       selecionadas.forEach(eq => {
         const rId = uid();
         firestore.collection("reservas").add({ id: rId, batchId: currentBatchId, userId: user.id, userName: user.name, date: d, lesson: l, segment: seg, equipment: eq.id, type: t, status: "confirmed", purpose: newPurpose, createdAt: horaCriacao });
