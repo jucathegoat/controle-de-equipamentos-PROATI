@@ -1,4 +1,3 @@
-// FORÇAR DESREGISTRO DE SERVICE WORKER ANTIGO NO NAVEGADOR
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(registrations => {
     for (let registration of registrations) {
@@ -12,7 +11,6 @@ if ('caches' in window) {
   });
 }
 
-// CONFIGURAÇÃO DO SEU PROJETO FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyCaz1JCXX1RLOZviyG3Ggf47B0blheSa68",
   authDomain: "reserva-escolamariaolimpia.firebaseapp.com",
@@ -27,24 +25,21 @@ if (!firebase.apps.length) {
 }
 const firestore = firebase.firestore();
 
-// CHAVES DE SESSÃO ESTÁVEIS
 const SESSION_KEY = "controle_sessao_proati_v11";
 const USER_CACHE_KEY = "controle_user_data_v11";
 
-// AVARIAS INICIAIS MAPEADAS
 const AVARIAS_INICIAIS = [
   "SA3", "SA4", "SA10", "SA12", "SA29", "SA33", "SA34",
   "PV1", "PV3", "PV5", "PV9",
   "PN9"
 ];
 
-// MODELOS OFICIAIS (TOTAL 158 MÁQUINAS)
 const MODELOS_EQUIPAMENTO = [
-  { id: "M", label: "M (Multilaser - M1 a M76)" },
-  { id: "SA", label: "SA (Samsung - SA1 a SA45)" },
-  { id: "PV", label: "PV (Positivo Velho - PV1 a PV15)" },
-  { id: "PN", label: "PN (Positivo Novo - PN1 a PN11)" },
-  { id: "TAB", label: "TAB (Tablet - TAB1 a TAB11)" }
+  { id: "M", label: "M (Multilaser)" },
+  { id: "SA", label: "SA (Samsung)" },
+  { id: "PV", label: "PV (Positivo Velho)" },
+  { id: "PN", label: "PN (Positivo Novo)" },
+  { id: "TAB", label: "TAB (Tablet - 11 unid.)" }
 ];
 
 let deferredPrompt = null;
@@ -77,7 +72,6 @@ const TABELAS_HORARIOS = {
   ]
 };
 
-// LISTA DE FINALIDADES / MATÉRIAS ATUALIZADA
 const FINALIDADES = [
   { id: "redacao", label: "✍️ Redação", priority: 1 },
   { id: "programacao", label: "💻 Programação", priority: 1 },
@@ -154,35 +148,6 @@ function inicializarBancoEmNuvem() {
     if (snap.empty) {
       firestore.collection("users").add({ id: "adm", name: "Administrador", userLogin: "adm", pass: "1703", role: "admin" });
       firestore.collection("users").add({ id: "demo", name: "Professor Exemplo", userLogin: "prof", pass: "0001", role: "professor" });
-    }
-  });
-
-  firestore.collection("machines").get().then(snap => {
-    const totalAtual = snap.docs.length;
-    if (snap.empty || totalAtual !== 158) {
-      const exclusoes = snap.docs.map(doc => doc.ref.delete());
-      Promise.all(exclusoes).then(() => {
-        for (let i = 1; i <= 76; i++) {
-          const id = `M${i}`;
-          firestore.collection("machines").add({ id, model: "M", type: "notebook", status: AVARIAS_INICIAIS.includes(id) ? "maintenance" : "available", serialNumber: "" });
-        }
-        for (let i = 1; i <= 45; i++) {
-          const id = `SA${i}`;
-          firestore.collection("machines").add({ id, model: "SA", type: "notebook", status: AVARIAS_INICIAIS.includes(id) ? "maintenance" : "available", serialNumber: "" });
-        }
-        for (let i = 1; i <= 15; i++) {
-          const id = `PV${i}`;
-          firestore.collection("machines").add({ id, model: "PV", type: "notebook", status: AVARIAS_INICIAIS.includes(id) ? "maintenance" : "available", serialNumber: "" });
-        }
-        for (let i = 1; i <= 11; i++) {
-          const id = `PN${i}`;
-          firestore.collection("machines").add({ id, model: "PN", type: "notebook", status: AVARIAS_INICIAIS.includes(id) ? "maintenance" : "available", serialNumber: "" });
-        }
-        for (let i = 1; i <= 11; i++) {
-          const id = `TAB${i}`;
-          firestore.collection("machines").add({ id, model: "TAB", type: "tablet", status: "available", serialNumber: "" });
-        }
-      });
     }
   });
 }
@@ -485,15 +450,9 @@ window.modalAgendamentoRapido = modalAgendamentoRapido;
 
 function dashboard() {
   const hoje = new Date().toISOString().split("T")[0];
-  const totalNotebooks = db.machines.filter(m => m.type === "notebook").length;
-  const totalTablets = db.machines.filter(m => m.type === "tablet").length;
-  
   const resHoje = db.reservas.filter(r => r.date === hoje && r.status === "confirmed");
   const noteResHojeUnique = new Set(resHoje.filter(r => r.type === "notebook").map(r => r.equipment)).size;
   const tabResHojeUnique = new Set(resHoje.filter(r => r.type === "tablet").map(r => r.equipment)).size;
-
-  const notePct = Math.round((noteResHojeUnique / totalNotebooks) * 100) || 0;
-  const tabPct = Math.round((tabResHojeUnique / totalTablets) * 100) || 0;
 
   const userRes = db.reservas.filter(r => r.userId === user.id && r.status === "confirmed");
   const userBatchesCount = new Set(userRes.map(r => r.batchId || r.id)).size;
@@ -503,7 +462,7 @@ function dashboard() {
     <div class="head">
       <div>
         <h2>Painel Principal</h2>
-        <div class="muted">Escola Maria Olímpia de Souza Queiroz Maciel</div>
+        <div class="muted">Escola Maria Olímpia de Souza Queiroz Maciel · Total: 157 máq. (146 Notebooks / 11 Tablets)</div>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <button class="ok" onclick="modalAgendamentoRapido()">⚡ Agendamento Rápido</button>
@@ -516,13 +475,11 @@ function dashboard() {
     <div class="grid">
       <div class="card stat">
         <span>💻 Notebooks Agendados Hoje</span>
-        <b>${noteResHojeUnique} / ${totalNotebooks}</b>
-        <div class="progress-bar"><div class="fill" style="width:${notePct}%"></div></div>
+        <b>${noteResHojeUnique} / 146 máq.</b>
       </div>
       <div class="card stat">
         <span>📱 Tablets Agendados Hoje</span>
-        <b>${tabResHojeUnique} / ${totalTablets}</b>
-        <div class="progress-bar"><div class="fill alt" style="width:${tabPct}%"></div></div>
+        <b>${tabResHojeUnique} / 11 máq.</b>
       </div>
       <div class="card stat">
         <span>📅 Seus Lotes de Reserva</span>
@@ -552,7 +509,7 @@ function avarias() {
 
     <div class="card" style="margin-bottom:16px;">
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-        <input id="searchMachine" placeholder="🔍 Digite o ID da máquina (ex: SA3, PV1, PN9, M16)..." style="flex:1;">
+        <input id="searchMachine" placeholder="🔍 Digite o ID da máquina (ex: SA3, PV1, PN90, M88)..." style="flex:1;">
         <select id="filterStatus">
           <option value="todos">Todos os Status</option>
           <option value="pendente">Pendentes</option>
@@ -696,9 +653,8 @@ function renderizarOpcoesHorario(segmentoKey) {
   `).join("");
 }
 
-/* ÁREA DE SOLICITAÇÕES COM FILTRO DE PROFESSORES, DIAS, MAQUINAS E STATUS */
 function solicitacoes() {
-  const professoresUnicos = Array.from(new Set(db.emprestimos.map(e => e.userName))).sort();
+  const listaProfessores = db.users.filter(u => u.role === "professor" || u.role === "admin");
 
   $("main").innerHTML = `
     <div class="head">
@@ -707,24 +663,22 @@ function solicitacoes() {
     </div>
 
     <div class="card" style="margin-bottom:16px;">
-      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-        <input id="searchSolicitacao" placeholder="🔍 Buscar por professor, ID máquina ou Lote..." style="flex:2; min-width:180px;">
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px; align-items:center;">
+        <input id="searchSolicitacao" placeholder="🔍 Buscar ID, Máquina..." style="width:100%;">
         
-        <select id="filterProfSolicitacao" style="flex:1; min-width:150px;">
+        <select id="filterProfSolicitacao" style="width:100%;">
           <option value="todos">👤 Todos os Professores</option>
-          ${professoresUnicos.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join("")}
+          ${listaProfessores.map(p => `<option value="${p.name}">${esc(p.name)}</option>`).join("")}
         </select>
 
-        <input type="date" id="filterDateSolicitacao" style="flex:1; min-width:130px;" title="Filtrar por data de uso">
+        <input id="filterDataSolicitacao" type="date" style="width:100%;" title="Filtrar por Dia de Uso">
 
-        <select id="filterStatusSolicitacao" style="flex:1; min-width:140px;">
+        <select id="filterStatusSolicitacao" style="width:100%;">
           <option value="todos">Todos os Status</option>
           <option value="aguardando">🔔 Solicitado (Aguardando)</option>
           <option value="retirado">📦 Em Uso (Retirado)</option>
           <option value="devolvido">✅ Devolvido</option>
         </select>
-
-        <button class="secondary" id="btnClearSolFilters" style="padding:8px 12px; font-size:12px;">🧹 Limpar</button>
       </div>
     </div>
 
@@ -736,27 +690,20 @@ function solicitacoes() {
 
   $("searchSolicitacao").addEventListener("input", atualizarFiltroSolicitacoes);
   $("filterProfSolicitacao").addEventListener("change", atualizarFiltroSolicitacoes);
-  $("filterDateSolicitacao").addEventListener("change", atualizarFiltroSolicitacoes);
+  $("filterDataSolicitacao").addEventListener("change", atualizarFiltroSolicitacoes);
   $("filterStatusSolicitacao").addEventListener("change", atualizarFiltroSolicitacoes);
-  
-  $("btnClearSolFilters").onclick = () => {
-    $("searchSolicitacao").value = "";
-    $("filterProfSolicitacao").value = "todos";
-    $("filterDateSolicitacao").value = "";
-    $("filterStatusSolicitacao").value = "todos";
-    atualizarFiltroSolicitacoes();
-  };
 }
 
 function atualizarFiltroSolicitacoes() {
   const query = $("searchSolicitacao").value.trim().toLowerCase();
   const prof = $("filterProfSolicitacao").value;
-  const dateVal = $("filterDateSolicitacao").value;
+  const dataUso = $("filterDataSolicitacao").value;
   const status = $("filterStatusSolicitacao").value;
-  $("solicitacoesTableContainer").innerHTML = renderizarTabelaSolicitacoes(query, status, prof, dateVal);
+
+  $("solicitacoesTableContainer").innerHTML = renderizarTabelaSolicitacoes(query, prof, dataUso, status);
 }
 
-function renderizarTabelaSolicitacoes(query = "", filterStatus = "todos", filterProf = "todos", filterDate = "") {
+function renderizarTabelaSolicitacoes(query = "", filterProf = "todos", filterData = "", filterStatus = "todos") {
   const raw = user.role === "admin" ? db.emprestimos : db.emprestimos.filter(x => x.userId === user.id);
   const groups = {};
   raw.forEach(x => {
@@ -769,17 +716,14 @@ function renderizarTabelaSolicitacoes(query = "", filterStatus = "todos", filter
 
   let groupArray = Object.values(groups).sort((a, b) => b.date.localeCompare(a.date));
 
-  // Filtro de Professor
   if (filterProf !== "todos") {
     groupArray = groupArray.filter(g => g.userName === filterProf);
   }
 
-  // Filtro de Data
-  if (filterDate) {
-    groupArray = groupArray.filter(g => g.date === filterDate);
+  if (filterData) {
+    groupArray = groupArray.filter(g => g.date === filterData);
   }
 
-  // Filtro de Status
   if (filterStatus !== "todos") {
     groupArray = groupArray.filter(g => {
       const isRetirado = g.statuses.has("retirado");
@@ -793,16 +737,13 @@ function renderizarTabelaSolicitacoes(query = "", filterStatus = "todos", filter
     });
   }
 
-  // Busca textual geral (Nome, ID da Máquina, Lote ou Data formatada)
   if (query) {
     groupArray = groupArray.filter(g => {
       const eqStr = Array.from(g.equipments).join(" ").toLowerCase();
-      const dateFmt = g.date.split('-').reverse().join('/');
       return g.userName.toLowerCase().includes(query) ||
              g.batchId.toLowerCase().includes(query) ||
              eqStr.includes(query) ||
-             g.date.includes(query) ||
-             dateFmt.includes(query);
+             g.date.includes(query);
     });
   }
 
@@ -875,10 +816,10 @@ function modalAtribuirMaquinasPedido(batchId) {
 
     <div style="margin-bottom:14px;">
       <label style="font-size:12px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">
-        ⌨️ Adicionar Rápido por Número/ID:
+        ⌨️ Adicionar Rápido por Número/ID Livre:
       </label>
       <div style="display:flex; gap:6px;">
-        <input type="text" id="inpQuickAddMachine" placeholder="Digite ex: 88, M88, PV9..." style="flex:1;">
+        <input type="text" id="inpQuickAddMachine" placeholder="Digite qualquer ID (ex: PN90, M88, SA3)..." style="flex:1;">
         <button type="button" id="btnQuickAddSubmit" class="btn-primary">+ Add</button>
       </div>
     </div>
@@ -897,18 +838,13 @@ function modalAtribuirMaquinasPedido(batchId) {
     </div>
 
     <div style="margin-bottom:10px; display:flex; gap:8px; justify-content:space-between;">
-      <button type="button" id="btnAutoSelectFirst" class="ok" style="font-size:11px; padding:6px 12px;">
-        ⚡ Auto-selecionar ${qtdNecessaria} máq.
-      </button>
       <button type="button" id="btnClearSelection" class="danger" style="font-size:11px; padding:6px 12px;">
-        🧹 Limpar
+        🧹 Limpar Seleção
       </button>
     </div>
 
-    <div id="gridChipsContainer" class="assign-chips-grid"></div>
-
     <div style="margin-top:12px; padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; font-size:12px;">
-      <span style="color:#64748b; font-weight:600;">Máquinas selecionadas:</span>
+      <span style="color:#64748b; font-weight:600;">Máquinas digitadas/selecionadas:</span>
       <div id="selectedSummary" style="margin-top:2px; font-weight:700; color:#4f46e5; word-break:break-all;">
         Nenhuma máquina selecionada
       </div>
@@ -921,37 +857,6 @@ function modalAtribuirMaquinasPedido(batchId) {
     </form>
   `);
 
-  const renderGrid = () => {
-    const container = m.querySelector("#gridChipsContainer");
-    const maquinasDoModelo = db.machines.filter(m => m.model === modeloAtual);
-
-    container.innerHTML = maquinasDoModelo.map(maq => {
-      const isSelected = maquinasSelecionadas.includes(maq.id);
-      const isAvaria = AVARIAS_INICIAIS.includes(maq.id) || maq.status === "maintenance";
-
-      return `
-        <div class="chip-item ${isSelected ? 'selected' : ''} ${isAvaria ? 'has-avaria' : ''}" data-id="${maq.id}">
-          ${maq.id} ${isAvaria ? '⚠️' : ''}
-        </div>
-      `;
-    }).join("");
-
-    container.querySelectorAll(".chip-item").forEach(chip => {
-      chip.onclick = () => {
-        const idMaq = chip.dataset.id;
-        if (maquinasSelecionadas.includes(idMaq)) {
-          maquinasSelecionadas = maquinasSelecionadas.filter(x => x !== idMaq);
-        } else {
-          if (maquinasSelecionadas.length >= qtdNecessaria) {
-            return alert(`Você já selecionou a quantidade necessária de ${qtdNecessaria} máquina(s)!`);
-          }
-          maquinasSelecionadas.push(idMaq);
-        }
-        atualizarModalUI();
-      };
-    });
-  };
-
   const atualizarModalUI = () => {
     m.querySelector("#lblCounter").textContent = `${maquinasSelecionadas.length} / ${qtdNecessaria} selecionadas`;
     
@@ -963,8 +868,6 @@ function modalAtribuirMaquinasPedido(batchId) {
       summary.textContent = maquinasSelecionadas.join(", ");
       summary.style.color = "#4f46e5";
     }
-
-    renderGrid();
   };
 
   const processarQuickAdd = () => {
@@ -972,18 +875,11 @@ function modalAtribuirMaquinasPedido(batchId) {
     const rawVal = inpQuick.value.trim().toUpperCase();
     if (!rawVal) return;
 
-    let targetMaq = db.machines.find(maq => maq.id.toUpperCase() === rawVal);
-    if (!targetMaq) {
-      targetMaq = db.machines.find(maq => maq.id.toUpperCase() === (modeloAtual + rawVal));
+    let idMaq = rawVal;
+    if (!isNaN(rawVal)) {
+      idMaq = modeloAtual + rawVal;
     }
 
-    if (!targetMaq) {
-      alert(`Máquina "${rawVal}" não foi encontrada!`);
-      inpQuick.value = "";
-      return;
-    }
-
-    const idMaq = targetMaq.id;
     if (maquinasSelecionadas.includes(idMaq)) {
       maquinasSelecionadas = maquinasSelecionadas.filter(x => x !== idMaq);
     } else {
@@ -993,13 +889,6 @@ function modalAtribuirMaquinasPedido(batchId) {
         return;
       }
       maquinasSelecionadas.push(idMaq);
-    }
-
-    if (targetMaq.model !== modeloAtual) {
-      modeloAtual = targetMaq.model;
-      m.querySelectorAll(".btn-model-filter").forEach(b => {
-        b.classList.toggle("active", b.dataset.model === modeloAtual);
-      });
     }
 
     inpQuick.value = "";
@@ -1031,20 +920,8 @@ function modalAtribuirMaquinasPedido(batchId) {
       m.querySelectorAll(".btn-model-filter").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       modeloAtual = btn.dataset.model;
-      renderGrid();
     };
   });
-
-  m.querySelector("#btnAutoSelectFirst").onclick = () => {
-    const disponiveis = db.machines.filter(maq => 
-      maq.model === modeloAtual && 
-      !AVARIAS_INICIAIS.includes(maq.id) && 
-      maq.status !== "maintenance"
-    );
-
-    maquinasSelecionadas = disponiveis.slice(0, qtdNecessaria).map(x => x.id);
-    atualizarModalUI();
-  };
 
   m.querySelector("#btnClearSelection").onclick = () => {
     maquinasSelecionadas = [];
@@ -1080,7 +957,7 @@ function modalAtribuirMaquinasPedido(batchId) {
     m.remove();
   };
 
-  renderGrid();
+  atualizarModalUI();
 }
 
 function devolverLoteRotativo(batchId) {
@@ -1149,7 +1026,7 @@ function modalReportDefeito() {
           </select>
         </label>
         <label>Número / Identificador:
-          <input id="repNum" placeholder="Ex: SA3 ou 1" style="width:100%;" required>
+          <input id="repNum" placeholder="Ex: SA3, PN90, M88..." style="width:100%;" required>
         </label>
       </div>
       <label style="margin-top:12px; display:block; font-size:12px; font-weight:600;">Descrição do Defeito:
@@ -1790,6 +1667,55 @@ function modalDetalhesDia(dateStr) {
 }
 
 function reservas() {
+  const listaProfessores = db.users.filter(u => u.role === "professor" || u.role === "admin");
+
+  $("main").innerHTML = `
+    <div class="head">
+      <div><h2>Reservas por Lote</h2><div class="muted">Agendamentos registrados no sistema (157 equip. cadastrados)</div></div>
+      <button class="btn-primary" onclick="modalReserva()">+ Nova Reserva</button>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px; align-items:center;">
+        <input id="searchReserva" placeholder="🔍 Buscar ID, Matéria, Máquina..." style="width:100%;">
+        
+        <select id="filterProfReserva" style="width:100%;">
+          <option value="todos">👤 Todos os Professores</option>
+          ${listaProfessores.map(p => `<option value="${p.name}">${esc(p.name)}</option>`).join("")}
+        </select>
+
+        <div style="display:flex; gap:4px; align-items:center;">
+          <input id="filterDataReserva" type="date" style="width:100%;" title="Filtrar por Dia da Reserva">
+          <button type="button" id="btnReservaHoje" class="secondary" style="padding:8px 12px; font-size:12px; white-space:nowrap;">Hoje</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div id="reservasTableContainer">
+        ${renderizarTabelaReservas()}
+      </div>
+    </div>`;
+
+  $("searchReserva").addEventListener("input", atualizarFiltroReservas);
+  $("filterProfReserva").addEventListener("change", atualizarFiltroReservas);
+  $("filterDataReserva").addEventListener("change", atualizarFiltroReservas);
+  $("btnReservaHoje").addEventListener("click", () => {
+    const hoje = new Date().toISOString().split("T")[0];
+    $("filterDataReserva").value = hoje;
+    atualizarFiltroReservas();
+  });
+}
+
+function atualizarFiltroReservas() {
+  const query = $("searchReserva").value.trim().toLowerCase();
+  const prof = $("filterProfReserva").value;
+  const dataRes = $("filterDataReserva").value;
+
+  $("reservasTableContainer").innerHTML = renderizarTabelaReservas(query, prof, dataRes);
+}
+
+function renderizarTabelaReservas(query = "", filterProf = "todos", filterData = "") {
   const raw = user.role === "admin" ? db.reservas : db.reservas.filter(x => x.userId === user.id);
   const groups = {};
   raw.forEach(r => {
@@ -1802,40 +1728,55 @@ function reservas() {
     groups[bid].equipments.add(r.equipment);
   });
 
-  const groupArray = Object.values(groups).sort((a, b) => b.date.localeCompare(a.date));
+  let groupArray = Object.values(groups).sort((a, b) => b.date.localeCompare(a.date));
 
-  $("main").innerHTML = `
-    <div class="head">
-      <div><h2>Reservas por Lote</h2><div class="muted">Agendamentos registrados</div></div>
-      <button class="btn-primary" onclick="modalReserva()">+ Nova Reserva</button>
-    </div>
-    <div class="card">
-      <div class="table-container">
-        <div class="table">
-          <table>
-            <tr><th>Professor</th><th>Data Uso</th><th>Tipo</th><th>Segmento</th><th>Atividade / Matéria</th><th>Horários</th><th>Qtd. Máquinas</th><th>Reservado em</th><th>Ações</th></tr>
-            ${groupArray.map(g => {
-              const finObj = FINALIDADES.find(f => f.id === g.purpose);
-              const segLabel = g.segment === "8_9" ? "8º/9º Ano" : "6º/7º Ano";
-              return `<tr>
-                <td><b>👤 ${esc(g.userName)}</b></td>
-                <td><b>${g.date.split('-').reverse().join('/')}</b></td>
-                <td>${g.type === "tablet" ? "📱 Tablet" : "💻 Notebook"}</td>
-                <td><small><b>${segLabel}</b></small></td>
-                <td><small>${finObj ? finObj.label : '📌 Outros'}</small></td>
-                <td><span class="pill reserved">${Array.from(g.lessonsNames).join(", ")}</span></td>
-                <td><b>${g.equipments.size} máq.</b></td>
-                <td><small class="muted">🕒 ${g.createdAt}</small></td>
-                <td>
-                  ${(user.role === "admin" || user.id === g.userId) ? `
-                    <button class="ok" onclick="modalMaquinasExtras('${g.batchId}')">➕ Extra (Máx 5)</button>
-                    <button class="danger" onclick="cancelarLote('${g.batchId}')">🗑️ Excluir</button>
-                  ` : "—"}
-                </td>
-              </tr>`;
-            }).join("") || "<tr><td colspan=9>Nenhuma reserva registrada.</td></tr>"}
-          </table>
-        </div>
+  if (filterProf !== "todos") {
+    groupArray = groupArray.filter(g => g.userName === filterProf);
+  }
+
+  if (filterData) {
+    groupArray = groupArray.filter(g => g.date === filterData);
+  }
+
+  if (query) {
+    groupArray = groupArray.filter(g => {
+      const eqStr = Array.from(g.equipments).join(" ").toLowerCase();
+      const finObj = FINALIDADES.find(f => f.id === g.purpose);
+      const finLabel = finObj ? finObj.label.toLowerCase() : "";
+      return g.userName.toLowerCase().includes(query) ||
+             g.batchId.toLowerCase().includes(query) ||
+             eqStr.includes(query) ||
+             finLabel.includes(query) ||
+             g.date.includes(query);
+    });
+  }
+
+  return `
+    <div class="table-container">
+      <div class="table">
+        <table>
+          <tr><th>Professor</th><th>Data Uso</th><th>Tipo</th><th>Segmento</th><th>Atividade / Matéria</th><th>Horários</th><th>Qtd. Máquinas</th><th>Reservado em</th><th>Ações</th></tr>
+          ${groupArray.map(g => {
+            const finObj = FINALIDADES.find(f => f.id === g.purpose);
+            const segLabel = g.segment === "8_9" ? "8º/9º Ano" : "6º/7º Ano";
+            return `<tr>
+              <td><b>👤 ${esc(g.userName)}</b></td>
+              <td><b>${g.date.split('-').reverse().join('/')}</b></td>
+              <td>${g.type === "tablet" ? "📱 Tablet" : "💻 Notebook"}</td>
+              <td><small><b>${segLabel}</b></small></td>
+              <td><small>${finObj ? finObj.label : '📌 Outros'}</small></td>
+              <td><span class="pill reserved">${Array.from(g.lessonsNames).join(", ")}</span></td>
+              <td><b>${g.equipments.size} máq.</b></td>
+              <td><small class="muted">🕒 ${g.createdAt}</small></td>
+              <td>
+                ${(user.role === "admin" || user.id === g.userId) ? `
+                  <button class="ok" onclick="modalMaquinasExtras('${g.batchId}')">➕ Extra (Máx 5)</button>
+                  <button class="danger" onclick="cancelarLote('${g.batchId}')">🗑️ Excluir</button>
+                ` : "—"}
+              </td>
+            </tr>`;
+          }).join("") || "<tr><td colspan=9>Nenhuma reserva encontrada com esses filtros.</td></tr>"}
+        </table>
       </div>
     </div>`;
 }
@@ -1851,13 +1792,6 @@ function modalMaquinasExtras(batchId) {
   const userId = loteReservas[0].userId;
   const userName = loteReservas[0].userName;
 
-  const disponiveis = availInLessons(data, aulas, tipo, seg, batchId);
-  const maxPermitidoExtra = Math.min(5, disponiveis.length);
-
-  if (maxPermitidoExtra <= 0) {
-    return alert("Não há máquinas livres adicionais para esse horário.");
-  }
-
   const m = modal(`
     <div class="modal-top">
       <h2>➕ Solicitar Máquinas Extras (Máximo 5)</h2>
@@ -1865,8 +1799,8 @@ function modalMaquinasExtras(batchId) {
     </div>
     <form id="fextra">
       <div class="form-grid">
-        <label>Quantidade de Extras (Máx. ${maxPermitidoExtra}):
-          <input id="numExtra" type="number" min="1" max="${maxPermitidoExtra}" value="1" required style="width:100%;">
+        <label>Quantidade de Extras (Máx. 5):
+          <input id="numExtra" type="number" min="1" max="5" value="1" required style="width:100%;">
         </label>
       </div>
       <label style="margin-top:12px; display:block; font-size:12px; font-weight:600;">Motivo da Solicitação Extra:
@@ -1883,23 +1817,23 @@ function modalMaquinasExtras(batchId) {
     const motivo = $("motivoExtra").value.trim();
 
     if (qtn > 5) return alert("O limite máximo é de 5 máquinas extras por solicitação.");
-    if (qtn > maxPermitidoExtra) return alert(`No momento só há saldo de ${maxPermitidoExtra} máquina(s) disponível(is).`);
     if (!motivo) return alert("Por favor, preencha o motivo do pedido extra.");
 
-    const novas = disponiveis.slice(0, qtn);
     const horaCriacao = nowFormatted();
     const tabelaUsada = TABELAS_HORARIOS[seg] || TABELAS_HORARIOS["6_7"];
+    const prefix = tipo === 'tablet' ? 'TAB' : 'M';
 
     aulas.forEach(l => {
-      novas.forEach(eq => {
+      for (let i = 1; i <= qtn; i++) {
         const rId = uid();
+        const eqId = `${prefix}_EX_${Date.now().toString(36)}_${i}`;
         firestore.collection("reservas").add({ 
-          id: rId, batchId, userId, userName, date: data, lesson: l, segment: seg, equipment: eq.id, type: tipo, status: "confirmed", createdAt: horaCriacao, motivoExtra: motivo 
+          id: rId, batchId, userId, userName, date: data, lesson: l, segment: seg, equipment: eqId, type: tipo, status: "confirmed", createdAt: horaCriacao, motivoExtra: motivo 
         });
         firestore.collection("emprestimos").add({ 
-          id: uid(), reservationId: rId, batchId, userId, userName, date: data, lesson: `${tabelaUsada[l].label} (${tabelaUsada[l].start}–${tabelaUsada[l].end})`, segment: seg, equipment: eq.id, status: "aguardando", createdAt: horaCriacao, motivoExtra: motivo 
+          id: uid(), reservationId: rId, batchId, userId, userName, date: data, lesson: `${tabelaUsada[l].label} (${tabelaUsada[l].start}–${tabelaUsada[l].end})`, segment: seg, equipment: eqId, status: "aguardando", createdAt: horaCriacao, motivoExtra: motivo 
         });
-      });
+      }
     });
 
     alert(`${qtn} máquina(s) extra(s) adicionada(s) com sucesso!`);
@@ -1943,6 +1877,7 @@ function abrirFormularioReserva({ batchId, date, type, qty, selectedLessons, pur
   const isAdm = user.role === "admin";
   const isEdit = !!batchId;
   const segAtual = segment || "6_7";
+  const LIMITE_PROFESSOR = 35;
 
   const m = modal(`
     <div class="modal-top">
@@ -1980,8 +1915,8 @@ function abrirFormularioReserva({ batchId, date, type, qty, selectedLessons, pur
         <label style="font-weight:600; font-size:12px; display:block; margin-bottom:4px;">
           Escolher Máquinas Específicas (Opcional):
         </label>
-        <input id="rCustomMachines" placeholder="Ex: M88, PV9, SA3 (Separadas por vírgula)" style="width:100%;">
-        <small class="muted" style="display:block; margin-top:2px; font-size:11px;">Se deixado em branco, o sistema atribuirá automaticamente.</small>
+        <input id="rCustomMachines" placeholder="Ex: M88, PN90, SA3 (Separadas por vírgula)" style="width:100%;">
+        <small class="muted" style="display:block; margin-top:2px; font-size:11px;">Digite qualquer identificador rodando na escola. O sistema aceitará sem checagens rígidas.</small>
       </div>
 
       <div style="margin-top:16px">
@@ -2000,9 +1935,7 @@ function abrirFormularioReserva({ batchId, date, type, qty, selectedLessons, pur
 
   const updateUI = () => {
     const selected = getSelectedLessons();
-    const t = $("rt").value;
     const d = $("rd").value;
-    const seg = $("rsegment").value;
 
     if (isPastDate(d) || isWeekend(d) || isHoliday(d)) {
       $("ri").textContent = "A data selecionada não aceita reservas.";
@@ -2016,19 +1949,10 @@ function abrirFormularioReserva({ batchId, date, type, qty, selectedLessons, pur
       return;
     }
 
-    $("lblQty").querySelector("input").previousSibling.textContent = `Quantidade ${isAdm ? "(Sem limite)" : "(Máx. 30)"}`;
+    $("lblQty").querySelector("input").previousSibling.textContent = `Quantidade ${isAdm ? "(Sem limite)" : `(Máx. ${LIMITE_PROFESSOR})`}`;
 
-    const availMachines = availInLessons(d, selected, t, seg, batchId);
-    const maxPermitido = isAdm ? availMachines.length : Math.min(30, availMachines.length);
-    $("rq").max = Math.max(1, maxPermitido);
-
-    if (availMachines.length === 0) {
-      $("ri").textContent = `Sem equipamentos disponíveis nos horários selecionados para este segmento.`;
-      $("ri").className = "notice danger-notice";
-    } else {
-      $("ri").textContent = `${selected.length} horário(s) selecionado(s). Máquinas livres: até ${maxPermitido}.`;
-      $("ri").className = "notice";
-    }
+    $("ri").textContent = `${selected.length} horário(s) selecionado(s). Entrada livre de máquinas habilitada.`;
+    $("ri").className = "notice";
   };
 
   const bindCheckboxes = () => {
@@ -2067,33 +1991,18 @@ function abrirFormularioReserva({ batchId, date, type, qty, selectedLessons, pur
 
     if (isPastDate(d) || isWeekend(d) || isHoliday(d)) return alert("Data inválida ou bloqueada pelo calendário.");
     if (selectedLessons.length === 0) return alert("Selecione pelo menos 1 horário.");
-    if (selectedLessons.length > 6) return alert("Você só pode escolher no máximo 6 horários.");
-
-    const availMachines = availInLessons(d, selectedLessons, t, seg, batchId);
+    if (!isAdm && newQty > LIMITE_PROFESSOR) return alert(`O limite máximo permitido por reserva é de ${LIMITE_PROFESSOR} máquinas.`);
 
     let selecionadas = [];
 
     if (rawCustomMachines) {
       const customList = rawCustomMachines.split(/[,;\s]+/).map(x => x.trim().toUpperCase()).filter(Boolean);
-      
-      for (let reqId of customList) {
-        const match = availMachines.find(m => m.id.toUpperCase() === reqId);
-        if (!match) {
-          return alert(`A máquina "${reqId}" não existe, está em manutenção ou já está reservada nos horários selecionados.`);
-        }
-        if (!selecionadas.includes(match)) {
-          selecionadas.push(match);
-        }
-      }
-
-      if (selecionadas.length === 0) {
-        return alert("Nenhuma máquina válida foi inserida no campo de máquinas específicas.");
-      }
+      selecionadas = customList.map(id => ({ id }));
     } else {
-      if (availMachines.length < newQty) {
-        return alert(`Não há ${newQty} máquinas livres nos horários/segmento selecionados.`);
+      const prefix = t === 'tablet' ? 'TAB' : 'M';
+      for (let i = 1; i <= newQty; i++) {
+        selecionadas.push({ id: `${prefix}${i}` });
       }
-      selecionadas = availMachines.slice(0, newQty);
     }
 
     if (isEdit) {
